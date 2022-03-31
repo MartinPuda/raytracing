@@ -96,37 +96,6 @@
   (let [s 1e-8]
     (every? #(> s ^double (abs ^double %)) v3)))
 
-(defrecord Sphere [center radius mat-ptr])
-(defrecord Ray [orig dir])
-
-(defrecord Lambertian [albedo])
-(defrecord Metal [albedo fuzz])
-(defrecord Dielectric [ir])
-
-(defn metal [color f]
-  (Metal. color (if (> 1 ^double f) f 1)))
-
-(defn scatter-lamb
-  [{:keys [albedo fuzz] :as mat}
-   r-in
-   {:keys [normal p] :as rec}]
-  (let [scatter-direction (v+ normal
-                              (random-unit-vector))]
-    {:ok          true
-     :scattered   (->Ray p (if (near-zero scatter-direction)
-                             normal
-                             scatter-direction))
-     :attenuation albedo}))
-
-(defn scatter-metal
-  [{:keys [albedo fuzz] :as mat}
-   {:keys [orig dir] :as r-in}
-   {:keys [normal p] :as rec}]
-  (let [reflected (reflect (unit-vector dir) normal)
-        scattered (->Ray p (v+ reflected (v* (random-in-unit-sphere) fuzz)))
-        ok (pos? ^double (dot (:dir scattered) normal))]
-    {:ok ok :attenuation albedo :scattered scattered}))
-
 (defn reflectance [^double cosine ^double ref-idx]
   (let [r0 (m/pow
              (/ (- 1.0 ref-idx)
@@ -134,28 +103,51 @@
     (+ r0 (* (- 1.0 r0)
              (m/pow (- 1 cosine) 5)))))
 
-(defn scatter-die [{:keys [ir] :as mat}
-                   {:keys [orig dir] :as r-in}
-                   {:keys [p front-face normal] :as rec}]
-  (let [attenuation [1.0 1.0 1.0]
-        refraction-ratio (if front-face (/ 1.0 ^double ir) ir)
-        unit-direction (unit-vector dir)
-        cos-theta (min ^double (dot (map - unit-direction) normal) 1.0)
-        sin-theta (m/sqrt (- 1.0 (m/pow cos-theta 2)))
-        cannot-refract (> ^double (* ^double refraction-ratio ^double sin-theta) 1.0)
-        direction (if (or cannot-refract (> ^double (reflectance cos-theta refraction-ratio) ^double (rand)))
-                    (reflect unit-direction normal)
-                    (refract unit-direction normal refraction-ratio))]
-    {:ok true :attenuation attenuation :scattered (->Ray p direction)}))
+(defrecord Sphere [center radius mat-ptr])
+(defrecord Ray [orig dir])
 
-(defn scatter
-  [mat & args]
-  (apply
-    (condp = (class mat)
-      Lambertian scatter-lamb
-      Metal scatter-metal
-      Dielectric scatter-die)
-    mat args))
+(defprotocol Material
+  (scatter [mat r-in rec]))
+
+(defrecord Lambertian [albedo]
+  Material
+  (scatter [{:keys [albedo fuzz] :as mat} r-in {:keys [normal p] :as rec}]
+    (let [scatter-direction (v+ normal
+                                (random-unit-vector))]
+      {:ok          true
+       :scattered   (->Ray p (if (near-zero scatter-direction)
+                               normal
+                               scatter-direction))
+       :attenuation albedo})))
+
+(defrecord Metal [albedo fuzz]
+  Material
+  (scatter [{:keys [albedo fuzz] :as mat}
+            {:keys [orig dir] :as r-in}
+            {:keys [normal p] :as rec}]
+    (let [reflected (reflect (unit-vector dir) normal)
+          scattered (->Ray p (v+ reflected (v* (random-in-unit-sphere) fuzz)))
+          ok (pos? ^double (dot (:dir scattered) normal))]
+      {:ok ok :attenuation albedo :scattered scattered})))
+
+(defn metal [color f]
+  (Metal. color (if (> 1 ^double f) f 1)))
+
+(defrecord Dielectric [ir]
+  Material
+  (scatter [{:keys [ir] :as mat}
+            {:keys [orig dir] :as r-in}
+            {:keys [p front-face normal] :as rec}]
+    (let [attenuation [1.0 1.0 1.0]
+          refraction-ratio (if front-face (/ 1.0 ^double ir) ir)
+          unit-direction (unit-vector dir)
+          cos-theta (min ^double (dot (map - unit-direction) normal) 1.0)
+          sin-theta (m/sqrt (- 1.0 (m/pow cos-theta 2)))
+          cannot-refract (> ^double (* ^double refraction-ratio ^double sin-theta) 1.0)
+          direction (if (or cannot-refract (> ^double (reflectance cos-theta refraction-ratio) ^double (rand)))
+                      (reflect unit-direction normal)
+                      (refract unit-direction normal refraction-ratio))]
+      {:ok true :attenuation attenuation :scattered (->Ray p direction)})))
 
 (defn hit-sphere [{:keys [center radius mat-ptr] :as sphere}
                   {:keys [orig dir] :as r} t-min t-max]
@@ -312,10 +304,6 @@
         material-ground (Lambertian. [0.8 0.8 0.0])
         material-center (metal [0.8 0.6 0.2] 0.0)
         material-left (Lambertian. [0.1 0.2 0.5])
-        ;material-left
-        ;(Dielectric. 1.5)
-        ;material-left
-        ;(metal [0.8 0.6 0.2] 0.0)
         material-right (Lambertian. [0.1 0.2 0.5])          ;(Dielectric. 1.5);
         world                                               ;  (random-scene)
         [(Sphere. [0.0 -100.5 -1.0] 100.0 material-ground)
@@ -329,10 +317,10 @@
                     dist-to-focus (length (v- lookfrom lookat))
                     aperture 2.0]
                 (camera lookfrom lookat vup 20 aspect-ratio aperture dist-to-focus))
-              (camera-old [0 3 1]                           ; [-2 2 1]
-                          [0 0 -1]                          ; [0 0 -1]
+              (camera-old [0 3 2]
+                          [0 0 -1]
                           [0 1 0]
-                          30                                ;90.0
+                          30
                           aspect-ratio))
         get-ray-version (if new-camera get-ray get-ray-old)
         buffered-image (BufferedImage. 500 500 BufferedImage/TYPE_INT_RGB)]
