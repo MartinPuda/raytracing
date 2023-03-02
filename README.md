@@ -5,15 +5,18 @@ Clojure RayTracing
 Ray Tracing in One Weekend:
 https://raytracing.github.io/books/RayTracingInOneWeekend.html
 
+Ray Tracing: The Next Week
+https://raytracing.github.io/books/RayTracingTheNextWeek.html
+
 ## Usage
 
-Run `(-main)` (20 samples per pixel) or `(-main :samples 10)` for different number of samples.
+Run `(-main)` (30 samples per pixel) or `(-main :samples 10)` for different number of samples.
 
 Rendering can take some time, see output for informations about progress.
 
 ## License
 
-Copyright © 2022
+Copyright © 2023
 
 This program and the accompanying materials are made available under the
 terms of the Eclipse Public License 2.0 which is available at
