@@ -1,13 +1,14 @@
 (ns raytracing.core
-  (:require [clojure.math :as m]
-            [clojure.math.combinatorics :as c])
+  (:require
+    [clojure.math :as m]
+    [clojure.math.combinatorics :as c])
   (:import (javax.swing JFrame JPanel)
            (java.awt Dimension BorderLayout Color)
            (java.awt.image BufferedImage)
            (java.util.concurrent CountDownLatch))
   (:gen-class))
 
-;zacit s 4.4
+;zacit s 6
 
 (set! *unchecked-math* :warn-on-boxed)
 
@@ -181,9 +182,8 @@
   (value [this u v p] color-value))
 
 (defn solid-color
-  ([c] {:pre [(vector? c)]} (->SolidColor c))
-  ([red green blue] {:pre [(every? number? [red green blue])]}
-   (solid-color [red green blue])))
+  ([c] (->SolidColor c))
+  ([red green blue] (solid-color [red green blue])))
 
 (defrecord CheckerTexture [odd even]
   Texture
@@ -308,8 +308,6 @@
 (defn moving-sphere [center0 center1 time0 time1 radius mat_ptr]
   (->MovingSphere center0 center1 time0 time1 radius mat_ptr))
 
-
-
 (defrecord Sphere [center radius mat-ptr]
   Hittable
   (hit [{:keys [center radius mat-ptr] :as sphere}
@@ -336,8 +334,6 @@
                   (->HitRecord (ray-at r root) normal mat-ptr u v root front-face)))))))))
   (center [this time_] center))
 
-
-
 (defrecord Lambertian [albedo]
   Material
   (scatter [{:keys [albedo_ fuzz] :as mat}
@@ -350,14 +346,8 @@
        :attenuation (value albedo u v p)})))
 
 (defn lambertian
-  ([a] (->Lambertian (if (satisfies? Texture a)
-                       a
+  ([a] (->Lambertian (if (satisfies? Texture a) a
                        (solid-color a)))))
-
-;scattered = ray(rec.p, scatter_direction, r_in.time());
-;(if (near-zero scatter-direction)
-;  normal
-;  scatter-direction)
 
 (defrecord Metal [albedo fuzz]
   Material
@@ -388,25 +378,16 @@
                       (refract unit-direction normal refraction-ratio))]
       {:ok true :attenuation attenuation :scattered (ray p direction time_)})))
 
-;(defn random-in-hemisphere [normal]
-;  (let [in-unit-sphere (random-in-unit-sphere)]
-;    (if (> (dot in-unit-sphere normal) 0.0)
-;      in-unit-sphere
-;      (- in-unit-sphere))))
-
 (defn ray-color [{:keys [_ dir] :as r} world ^double depth]
   (if (>= 0 depth)
     [0 0 0]
     (if-let [{:keys [mat-ptr] :as rec}
              (hit (->HittableList world) r 0.001 ##Inf {})]
-      (do (when (nil? mat-ptr)
-            (prn rec)
-            (throw (Exception. "no mat-ptr")))
           (let [{:keys [ok attenuation scattered]} (scatter mat-ptr r rec)]
             (if ok
               (map * attenuation
                    (ray-color scattered world (dec depth)))
-              [0 0 0])))
+              [0 0 0]))
       (let [[x y z] (unit-vector dir)
             t (* 0.5 (inc ^double y))]
         (v+ (v* [1.0 1.0 1.0] (- 1.0 t))
@@ -428,7 +409,7 @@
                               (vd horizontal 2)
                               (vd vertical 2)
                               (v* w focus-dist))
-        lens-radius (/ ^long aperture 2)]
+        lens-radius (/ ^double aperture 2)]
     {:origin            origin
      :lower-left-corner lower-left-corner
      :horizontal        horizontal
@@ -454,12 +435,108 @@
              offset)
          (random-double time0 time1))))
 
-;(defn get-ray-old [{:keys [origin lower-left-corner horizontal vertical]} s t]
-;  (ray origin
-;       (v- (v+ lower-left-corner
-;               (v* horizontal s)
-;               (v* vertical t))
-;           origin)))
+(defn v-dist [v1 v2]
+  (m/sqrt (length (v- v1 v2))))
+
+(defn z-fix [objects]
+  (->> objects
+       (sort-by #(v-dist [13 2 3] (:center %)) <)
+       vec))
+
+(defprotocol Noise
+  (noise [this point])
+  (turb [this p depth]))
+
+(defn trilinear-interp [c ^double u ^double v ^double w]
+  (->> (for [^double i [0 1]
+             ^double j [0 1]
+             ^double k [0 1]]
+         (* ^double (+ (* i u) (* (- 1 i) (- 1 u)))
+            ^double (+ (* j v) (* (- 1 j) (- 1 v)))
+            ^double (+ (* k w) (* (- 1 k) (- 1 w)))
+            ^double (get-in c [i j k])))
+       (reduce +)))
+
+(defn perlin-interp [c ^double u ^double v ^double w]
+  (let [[uu vv ww] (mapv #(* ^double % ^double %
+                             ^double (- 3.0 (* 2.0 ^double %))) [u v w])]
+    (->> (for [^double i [0 1]
+               ^double j [0 1]
+               ^double k [0 1]]
+           (let [weight-v [(- u i) (- v j) (- w k)]]
+             (* ^double (+ ^double (* i ^double uu) ^double (* (- 1 ^double i) ^double (- 1 ^double uu)))
+                ^double (+ ^double (* j ^double vv) ^double (* (- 1 ^double j) ^double (- 1 ^double vv)))
+                ^double (+ ^double (* k ^double ww) ^double (* (- 1 ^double k) ^double (- 1 ^double ww)))
+                ^double (dot (get-in c [i j k]) weight-v))))
+         (reduce +))))
+
+(defrecord Perlin [^long point-count
+                   ranvec
+                   perm-x perm-y perm-z]
+  Noise
+  (noise [{:keys [ranvec perm-x perm-y perm-z]} point]
+    (let [[u v w] (mapv #(let [value ^double (- % ^double (m/floor %))]
+                           (* value value (- 3 ^double (* 2.0 ^double value))))
+                        point)
+          [i j k] (mapv #(long (m/floor %)) point)
+          c (->> (for [di [0 1]
+                       dj [0 1]
+                       dk [0 1]]
+                   [di dj dk])
+                 (reduce (fn [acc [di dj dk]]
+                           (assoc-in acc [di dj dk]
+                                     (ranvec (bit-or ^long (perm-x (bit-and (+ ^long i ^long di) 255))
+                                                     ^long (perm-y (bit-and (+ ^long j ^long dj) 255))
+                                                     ^long (perm-z (bit-and (+ ^long k ^long dk) 255))))))
+                         [[[0 0] [0 0]]
+                          [[0 0] [0 0]]]))]
+      (perlin-interp c u v w)))
+  (turb [this point depth]
+    (loop [i 0
+           acc 0.0
+           weight 1.0
+           temp-p point]
+      (if (= i depth)
+        (abs acc)
+        (recur (inc i)
+               (+ acc (* ^double weight
+                         ^double (noise this temp-p)))
+               (* weight 0.5)
+               (v* temp-p 2))))))
+
+(defn perlin-generate-perm []
+  (->> (range 256)
+       shuffle
+       vec))
+
+(defn perlin []
+  (let [point-count 256]
+    (->Perlin point-count
+              (vec (repeatedly point-count #(unit-vector (random-vec3 -1 1))))
+              (perlin-generate-perm)
+              (perlin-generate-perm)
+              (perlin-generate-perm))))
+
+(defrecord NoiseTexture [perlin-noise scale]
+  Texture
+  (value [this u v p]
+    (v* [1 1 1] (* 0.5 (inc (m/sin (+ (* scale (p 2))
+                                      (* 10 (turb perlin-noise p 7)))))))))
+
+(defn noise-texture
+  ([] (->NoiseTexture (perlin) 1.0))
+  ([sc] (->NoiseTexture (perlin) sc)))
+
+(defn two-spheres []
+  (let [checker (checker-texture [0.2 0.3 0.1]
+                                 [0.9 0.9 0.9])]
+    (z-fix [(->Sphere [0 -10 0] 10 (lambertian checker))
+            (->Sphere [0 10 0] 10 (lambertian checker))])))
+
+(defn two-perlin-spheres []
+  (let [pertext (noise-texture 4.0)]
+    (z-fix [(->Sphere [0 -1000 0] 1000 (lambertian pertext))
+            (->Sphere [0 2 0] 2 (lambertian pertext))])))
 
 (defn clamp [^double x ^double mn ^double mx]
   (cond (> mn x) mn
@@ -482,9 +559,6 @@
 ;
 ;      (moving-sphere center center2 0.0 1.0 0.2 (lambertian (mapv * (random-vec3) (random-vec3)))))
 
-(defn v-dist [v1 v2]
-  (m/sqrt (length (v- v1 v2))))
-
 (defn random-scene []
   ;(into
   ;  (->> (c/cartesian-product (range -2 2) (range -2 2)) ;(range -11 11) (range -11 11))
@@ -497,29 +571,28 @@
   ;                                   (< choose-mat 0.95)
   ;                                   (->Sphere center 0.2 (->Metal (random-vec3 0.5 1) (random-double 0 0.5)))
   ;                                   :else (->Sphere center 0.2 (->Dielectric 1.5))))))))
-  (sort-by #(v-dist [13 2 3] (:center %)) <
-           ;(into
-           ;  (->> (c/cartesian-product (range -2 2) (range -2 2)) ;(range -11 11) (range -11 11))
-           ;
-           ;       (mapv (fn [[a b]] (let [center [(+ (* 5 ^double (rand)) ^long a) ;(+ ^long a (* 0.9 ^double (rand)))
-           ;                                       0.5
-           ;                                       (+ (* 5 ^double (rand)) ^long b)]]
-           ;                           (->Sphere center 0.5 (->Metal (random-vec3 0.5 1) (random-double 0 0.0)))))))
-           ;  ;(+ ^long b (* 0.9 ^double (rand)))]]
-           ;  ; (->Sphere center 0.2 (lambertian (mapv * (random-vec3) (random-vec3))))
-           ;  ;   ))))
-           ;  ; (->Sphere center 0.5 (->Metal (random-vec3 0.5 1) (random-double 0 0.5)))))))
 
-             [
-              (->Sphere [4 1 0] 1.0 (->Metal [0.7 0.6 0.5] 0.0))
-              (->Sphere [0 1 0] 1.0 (->Metal [0.7 0.6 0.5] 0.0))
-              (->Sphere [-4 1 0] 1.0 (->Metal [0.7 0.6 0.5] 0.0))
-             ; (->Sphere [0 1 0] 1.0 (->Dielectric 1.5))
-            ;  (->Sphere [-4 1 0] 1.0 (lambertian [0.4 0.2 0.1]))
+  ;(into
+  ;  (->> (c/cartesian-product (range -2 2) (range -2 2)) ;(range -11 11) (range -11 11))
+  ;
+  ;       (mapv (fn [[a b]] (let [center [(+ (* 5 ^double (rand)) ^long a) ;(+ ^long a (* 0.9 ^double (rand)))
+  ;                                       0.5
+  ;                                       (+ (* 5 ^double (rand)) ^long b)]]
+  ;                           (->Sphere center 0.5 (->Metal (random-vec3 0.5 1) (random-double 0 0.0)))))))
+  ;  ;(+ ^long b (* 0.9 ^double (rand)))]]
+  ;  ; (->Sphere center 0.2 (lambertian (mapv * (random-vec3) (random-vec3))))
+  ;  ;   ))))
+  ;  ; (->Sphere center 0.5 (->Metal (random-vec3 0.5 1) (random-double 0 0.5)))))))
 
-              (->Sphere [0 -1000 0] 1000 (lambertian (checker-texture [0.2 0.3 0.1] [0.9 0.9 0.9])))
-              (->Sphere [0 -1000 0] 1000 (lambertian [0.5 0.5 0.5]))]))
-;)
+  (z-fix [
+          (->Sphere [4 1 0] 1.0 (->Metal [0.7 0.6 0.5] 0.0))
+          (->Sphere [0 1 0] 1.0 (->Metal [0.7 0.6 0.5] 0.0))
+          (->Sphere [-4 1 0] 1.0 (->Metal [0.7 0.6 0.5] 0.0))
+          ; (->Sphere [0 1 0] 1.0 (->Dielectric 1.5))
+          ;  (->Sphere [-4 1 0] 1.0 (lambertian [0.4 0.2 0.1]))
+
+          (->Sphere [0 -1000 0] 1000 (lambertian (checker-texture [0.2 0.3 0.1] [0.9 0.9 0.9])))
+          (->Sphere [0 -1000 0] 1000 (lambertian [0.5 0.5 0.5]))]))
 
 (defrecord Worker [work latch]
   Runnable
@@ -535,31 +608,27 @@
         image-width-dec (dec image-width)
         image-height-dec (dec image-height)
         samples-per-pixel samples
-        max-depth 50                                        ;50
-        ;material-ground (Lambertian. [0.8 0.8 0.0])
-        ;material-center (metal [0.8 0.6 0.2] 0.0)
-        ;material-left (Lambertian. [0.1 0.2 0.5])
-        ;material-right (Lambertian. [0.1 0.2 0.5])
-        ;(Dielectric. 1.5);
-        world (random-scene)
-        ;[(Sphere. [0.0 -100.5 -1.0] 100.0 material-ground)
-        ; (Sphere. [0.0 0.0 -1.0] 0.5 material-center)
-        ; (Sphere. [-1.0 0.0 -1.0] 0.5 material-left)
-        ; (Sphere. [1.0 0.0 -1.0] 0.5 material-right)]
-        ;cam (if new-camera
-        ;      (let [lookfrom [3 3 2]
-        ;            lookat [0 0 -1]
-        ;            vup [0 1 0]
-        ;            dist-to-focus (length (v- lookfrom lookat))
-        ;            aperture 2.0]
-        ;        (camera lookfrom lookat vup 20 aspect-ratio aperture dist-to-focus))
-        ;      (camera-old [0 3 2]
-        ;                  [0 0 -1]
-        ;                  [0 1 0]
-        ;                  30
-        ;                  aspect-ratio))
-        cam (camera [13 2 3] [0 0 0] [0 1 0] 20 aspect-ratio 0.1 10.0 0.0 0.0)
-        ;todo: kamera ma time1 mit nastaveny na 1.0
+        max-depth 50
+        im :two-perlin-spheres                              ;world
+        {:keys [world lookfrom lookat vfov aperture]}
+        (im {:world              {:world    (random-scene)
+                                  :lookfrom [13 2 3]
+                                  :lookat   [0 0 0]
+                                  :vfov     20.0
+                                  :aperture 0.1}
+             :two-spheres        {:world    (two-spheres)
+                                  :lookfrom [13 2 3]
+                                  :lookat   [0 0 0]
+                                  :vfov     20.0
+                                  :aperture 0.0}
+             :two-perlin-spheres {:world    (two-perlin-spheres)
+                                  :lookfrom [13 2 3]
+                                  :lookat   [0 0 0]
+                                  :vfov     20.0
+                                  :aperture 0.0}})
+        vup [0 1 0]
+        dist-to-focus 10.0
+        cam (camera lookfrom lookat vup vfov aspect-ratio aperture dist-to-focus 0.0 1.0)
         buffered-image (BufferedImage. 500 500 BufferedImage/TYPE_INT_RGB)
         latch (CountDownLatch. 225)]
     (dotimes [y image-height]
@@ -587,6 +656,7 @@
                                     (.getRGB (Color. ^int r
                                                      ^int g
                                                      ^int b)))))))
+                   ;   (.countDown latch)))))
                    latch))))
     (.await latch)
     (display-image buffered-image image-width image-height)))
@@ -661,4 +731,19 @@
 ;             (map #(clamp % 0.0 0.999))
 ;             (map #(* ^double % 255)))
 
-;todo ahoj
+;sachovnice, 3 koule, depth 50
+;"Elapsed time: 43229.0236 msecs"
+;"Elapsed time: 42388.0452 msecs"
+;"Elapsed time: 44769.0246 msecs"
+
+;"Elapsed time: 45960.1954 msecs"
+;"Elapsed time: 59640.5745 msecs"
+;"Elapsed time: 53389.345 msecs"
+
+;30 samplu 1 marble, 50 depth
+;(time (-main))
+;"Elapsed time: 286693.2659 msecs"
+;=>
+;#object[javax.swing.JFrame
+;        0x782a422a
+;        "javax.swing.JFrame[frame5,0,0,420x300,layout=java.awt.BorderLayout,title=Ray Tracing,resizable,normal,defaultCloseOperation=HIDE_ON_CLOSE,rootPane=javax.swing.JRootPane[,8,31,404x261,layout=javax.swing.JRootPane$RootLayout,alignmentX=0.0,alignmentY=0.0,border=,flags=16777673,maximumSize=,minimumSize=,preferredSize=],rootPaneCheckingEnabled=true]"]
