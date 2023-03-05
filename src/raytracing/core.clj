@@ -1,14 +1,19 @@
 (ns raytracing.core
   (:require
     [clojure.math :as m]
-    [clojure.math.combinatorics :as c])
+    [clojure.math.combinatorics :as c]
+    [clojure.java.io :as io])
   (:import (javax.swing JFrame JPanel)
            (java.awt Dimension BorderLayout Color)
-           (java.awt.image BufferedImage)
-           (java.util.concurrent CountDownLatch))
+           (java.awt.image BufferedImage DataBufferByte)
+           (java.util.concurrent CountDownLatch)
+           (java.nio.file Files)
+           (java.io File)
+           (javax.imageio ImageIO)
+           (java.net URL))
   (:gen-class))
 
-;zacit s 6
+;zacit s 7
 
 (set! *unchecked-math* :warn-on-boxed)
 
@@ -263,9 +268,10 @@
   ([orig dir] (ray orig dir 0.0))
   ([orig dir time_] (->Ray orig dir time_)))
 
-(defn get-sphere-uv [this p u v]
-  (let [theta (m/acos (- ^double (p 1)))
-        phi (+ (m/atan2 (- ^double (p 2)) ^double (p 0)) m/PI)]
+(defn get-sphere-uv [this [x y z] u v]
+  (let [theta (m/acos (- ^double y))
+        phi (+ (m/atan2 (- ^double z) ^double x)
+               m/PI)]
     {:u (/ phi (* 2 m/PI))
      :v (/ theta m/PI)}))
 
@@ -292,13 +298,13 @@
             (let [outward-normal (vd (v- (ray-at r root) (center sphere time_)) radius)
                   {:keys [u v]} (get-sphere-uv sphere outward-normal (:u rec) (:v rec))
                   {:keys [front-face normal]} (set-face-normal r outward-normal)]
-              (->HitRecord (ray-at r root) normal mat-ptr u v root front-face))
+              (->HitRecord (ray-at r root) normal mat-ptr root u v front-face))
             (let [root (/ ^double (+ ^double (- ^double half-b) root) ^double a)]
               (when (> t-max root t-min)
                 (let [outward-normal (vd (v- (ray-at r root) (center sphere time_)) radius)
                       {:keys [u v]} (get-sphere-uv sphere outward-normal (:u rec) (:v rec))
                       {:keys [front-face normal]} (set-face-normal r outward-normal)]
-                  (->HitRecord (ray-at r root) normal mat-ptr u v root front-face)))))))))
+                  (->HitRecord (ray-at r root) normal mat-ptr root u v front-face)))))))))
   (center [this time_]
     (v+ center0
         (v* (v- center1 center0)
@@ -325,13 +331,13 @@
             (let [outward-normal (vd (v- (ray-at r root) center) radius)
                   {:keys [u v]} (get-sphere-uv sphere outward-normal (:u rec) (:v rec))
                   {:keys [front-face normal]} (set-face-normal r outward-normal)]
-              (->HitRecord (ray-at r root) normal mat-ptr u v root front-face))
+              (->HitRecord (ray-at r root) normal mat-ptr root u v front-face))
             (let [root (/ ^double (+ ^double (- ^double half-b) root) ^double a)]
               (when (> t-max root t-min)
                 (let [outward-normal (vd (v- (ray-at r root) center) radius)
                       {:keys [u v]} (get-sphere-uv sphere outward-normal (:u rec) (:v rec))
                       {:keys [front-face normal]} (set-face-normal r outward-normal)]
-                  (->HitRecord (ray-at r root) normal mat-ptr u v root front-face)))))))))
+                  (->HitRecord (ray-at r root) normal mat-ptr root u v front-face)))))))))
   (center [this time_] center))
 
 (defrecord Lambertian [albedo]
@@ -347,7 +353,7 @@
 
 (defn lambertian
   ([a] (->Lambertian (if (satisfies? Texture a) a
-                       (solid-color a)))))
+                                                (solid-color a)))))
 
 (defrecord Metal [albedo fuzz]
   Material
@@ -383,11 +389,11 @@
     [0 0 0]
     (if-let [{:keys [mat-ptr] :as rec}
              (hit (->HittableList world) r 0.001 ##Inf {})]
-          (let [{:keys [ok attenuation scattered]} (scatter mat-ptr r rec)]
-            (if ok
-              (map * attenuation
-                   (ray-color scattered world (dec depth)))
-              [0 0 0]))
+      (let [{:keys [ok attenuation scattered]} (scatter mat-ptr r rec)]
+        (if ok
+          (map * attenuation
+               (ray-color scattered world (dec depth)))
+          [0 0 0]))
       (let [[x y z] (unit-vector dir)
             t (* 0.5 (inc ^double y))]
         (v+ (v* [1.0 1.0 1.0] (- 1.0 t))
@@ -476,7 +482,9 @@
   Noise
   (noise [{:keys [ranvec perm-x perm-y perm-z]} point]
     (let [[u v w] (mapv #(let [value ^double (- % ^double (m/floor %))]
-                           (* value value (- 3 ^double (* 2.0 ^double value))))
+                           (* ^double value
+                              ^double value
+                              (- 3 ^double (* 2.0 ^double value))))
                         point)
           [i j k] (mapv #(long (m/floor %)) point)
           c (->> (for [di [0 1]
@@ -520,28 +528,68 @@
 (defrecord NoiseTexture [perlin-noise scale]
   Texture
   (value [this u v p]
-    (v* [1 1 1] (* 0.5 (inc (m/sin (+ (* scale (p 2))
-                                      (* 10 (turb perlin-noise p 7)))))))))
+    (v* [1 1 1] (* ^double 0.5
+                   (inc ^double (m/sin (+ (* scale (p 2))
+                                          (* 10 (turb perlin-noise p 7)))))))))
 
 (defn noise-texture
   ([] (->NoiseTexture (perlin) 1.0))
   ([sc] (->NoiseTexture (perlin) sc)))
 
+(defn clamp [^double x ^double mn ^double mx]
+  (cond (> mn x) mn
+        (> x mx) mx
+        :else x))
+
+(defrecord ImageTexture [data width height bytes-per-scanline]
+  Texture
+  (value [this u v p]
+    (if-not data
+      [0 1 1]
+      (let [;v (/ v 10.0) ;bytes-per-pixel 3
+            uu (clamp u 0.0 1.0)
+            vv (- 1.0 (clamp v 0.0 1.0))
+           ; (clamp v 0.0 1.0)
+            i (int (* uu width))
+            j (int (* vv height))
+            i (if (>= i width) (dec width) i)
+            j (if (>= j height) (dec height) j)
+            color-scale (/ 1.0 255.0)]
+       ; (prn [u v j i]) ; (/ 1.0 255.0)]
+        (v* (get-in data [j i] [0.0 0.0 0.0])
+            color-scale)))))
+
+(defn image-texture
+  ([] (->ImageTexture nil 0 0 0))
+  ([^URL filename-url]
+   (let [bytes-per-pixel 3
+         image (ImageIO/read filename-url)
+         buffer (.getDataBuffer (.getRaster image))
+         data (->> (.getData ^DataBufferByte buffer)
+                   (mapv #(if (neg? %) (+ 256 %) %))
+                   (partition 3)
+                   (mapv (comp vec reverse))
+                   vec)
+         w (.getWidth image)
+         h (.getHeight image)]
+     (->ImageTexture (vec (partitionv w data))
+                     w h (* bytes-per-pixel w)))))
+
 (defn two-spheres []
   (let [checker (checker-texture [0.2 0.3 0.1]
                                  [0.9 0.9 0.9])]
     (z-fix [(->Sphere [0 -10 0] 10 (lambertian checker))
-            (->Sphere [0 10 0] 10 (lambertian checker))])))
+            (->Sphere [0 10 0] 2 (lambertian checker))])))
 
 (defn two-perlin-spheres []
   (let [pertext (noise-texture 4.0)]
     (z-fix [(->Sphere [0 -1000 0] 1000 (lambertian pertext))
             (->Sphere [0 2 0] 2 (lambertian pertext))])))
 
-(defn clamp [^double x ^double mn ^double mx]
-  (cond (> mn x) mn
-        (> x mx) mx
-        :else x))
+(defn earth []
+  (let [earth-texture (image-texture (io/resource "earthmap.jpg"))
+        earth-surface (lambertian earth-texture)]
+    [(->Sphere [0 0 0] 2 earth-surface)]))
 
 (defn display-image [img w h]
   (let [ppm-panel (doto (proxy [JPanel] []
@@ -609,23 +657,17 @@
         image-height-dec (dec image-height)
         samples-per-pixel samples
         max-depth 50
-        im :two-perlin-spheres                              ;world
-        {:keys [world lookfrom lookat vfov aperture]}
+        im :earth ;:two-perlin-spheres                              ;world
+        {:keys [world lookfrom lookat vfov aperture]
+         :or {lookfrom [13 2 3]
+              lookat [0 0 0]
+              aperture 0.0
+              vfov 20.0}}
         (im {:world              {:world    (random-scene)
-                                  :lookfrom [13 2 3]
-                                  :lookat   [0 0 0]
-                                  :vfov     20.0
                                   :aperture 0.1}
-             :two-spheres        {:world    (two-spheres)
-                                  :lookfrom [13 2 3]
-                                  :lookat   [0 0 0]
-                                  :vfov     20.0
-                                  :aperture 0.0}
-             :two-perlin-spheres {:world    (two-perlin-spheres)
-                                  :lookfrom [13 2 3]
-                                  :lookat   [0 0 0]
-                                  :vfov     20.0
-                                  :aperture 0.0}})
+             :two-spheres        {:world    (two-spheres)}
+             :two-perlin-spheres {:world    (two-perlin-spheres)}
+             :earth {:world (earth)}})
         vup [0 1 0]
         dist-to-focus 10.0
         cam (camera lookfrom lookat vup vfov aspect-ratio aperture dist-to-focus 0.0 1.0)
