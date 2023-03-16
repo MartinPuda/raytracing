@@ -1,12 +1,7 @@
 (ns raytracing.base
   (:require [clojure.java.io :as io]
             [clojure.math :as m])
-  (:import (javax.imageio ImageIO)
-           (java.awt.image DataBufferByte)
-           (java.net URL))
   (:gen-class))
-
-;zacit s 7
 
 (set! *unchecked-math* :warn-on-boxed)
 
@@ -132,32 +127,48 @@
 (defn random-int [min_ max_]
   (int (random-double min_ (inc ^double max_))))
 
-(defn box-compare [a b axis]
-  (let [box-a (bounding-box a 0 0 nil)
-        box-b (bounding-box b 0 0 nil)]
-    ;(if (or (not box-a) (not box-b))
-    ;  (throw (Exception. "No bounding box in bvh_node constructor.\n")))
-    (< ^double ((:minimum box-a) axis)
-       ^double ((:minimum box-b) axis))))
+;(defn box-compare [a b axis]
+;  ;(prn a b axis)
+;  (let [box-a (bounding-box a 0 0 nil)
+;        box-b (bounding-box b 0 0 nil)]
+;    ;(if (or (not box-a) (not box-b))
+;    ;  (throw (Exception. "No bounding box in bvh_node constructor.\n")))
+;    (< ^double ((:minimum box-a) axis)
+;       ^double ((:minimum box-b) axis))))
+;
+;(defn box-x-compare [a b]
+;  (box-compare a b 0))
+;
+;(defn box-y-compare [a b]
+;  (box-compare a b 1))
+;
+;(defn box-z-compare [a b]
+;  (box-compare a b 2))
 
-(defn box-x-compare [a b]
-  (box-compare a b 0))
+(defn box-compare [a axis]
+    ((:minimum (bounding-box a 0 0 nil)) axis))
 
-(defn box-y-compare [a b]
-  (box-compare a b 1))
+(defn box-x-compare [a]
+  (box-compare a 0))
 
-(defn box-z-compare [a b]
-  (box-compare a b 2))
+(defn box-y-compare [a]
+  (box-compare a 1))
+
+(defn box-z-compare [a]
+  (box-compare a 2))
 
 (defn bvhnode
-  ([list_ time0 time1] (bvhnode (:objects list_) 0 (count (:objects list_)) time0 time1))
+  ([list_ time0 time1] (bvhnode (:objects list_)
+                                0 (count (:objects list_)) time0 time1))
   ([src-objects start end time0 time1]
-   (let [objects src-objects
+   ;(prn (vec src-objects) "\n" ((vec src-objects) start))
+   (let [objects (vec src-objects)
          axis (random-int 0 2)
          comparator_ (cond (zero? ^double axis) box-x-compare
                            (== ^double axis 1) box-y-compare
                            :else box-z-compare)
          object-span ^double (- ^double end ^double start)
+         _ (prn objects (objects start))
          [left right] (cond (== ^double object-span 1)
                             [(objects start) (objects start)]
                             (== object-span 2)
@@ -165,7 +176,7 @@
                                              (objects (inc ^double start)))
                               [(objects start) (objects (inc ^double start))]
                               [(objects (inc ^double start)) (objects start)])
-                            :else (let [sorted-obj (sort-by comparator_ (objects start))
+                            :else (let [sorted-obj (sort-by comparator_ < (objects start))
 
                                         mid (+ ^double start ^double (/ object-span 2))]
                                     [(bvhnode sorted-obj start mid time0 time1)
@@ -176,32 +187,6 @@
      ;        (not box-right))
      ;  (throw (Exception. "No bounding box in bvh_node constructor.\n"))
        (->BvhNode left right (surrounding-box box-left box-right)))))
-
-(defprotocol Texture
-  (value [this u v p]))
-
-(defrecord SolidColor [color-value]
-  Texture
-  (value [this u v p] color-value))
-
-(defn solid-color
-  ([c] (->SolidColor c))
-  ([red green blue] (solid-color [red green blue])))
-
-(defrecord CheckerTexture [odd even]
-  Texture
-  (value [this u v p]
-    (let [sines (transduce (map #(m/sin (* 10 ^double %)))
-                           * p)]
-      (if (neg? ^double sines)
-        (value odd u v p)
-        (value even u v p)))))
-
-(defn checker-texture
-  ([c1 c2] (if (satisfies? Texture c1)
-             (->CheckerTexture c1 c2)
-             (->CheckerTexture (solid-color c1)
-                               (solid-color c2)))))
 
 (defn ray-at [{:keys [orig dir]} t]
   (v+ orig (v* dir t)))
@@ -258,34 +243,6 @@
                 (+ 1.0 ref-idx)) 2)]
     (+ r0 (* (- 1.0 r0)
              (m/pow (- 1 cosine) 5)))))
-
-(defrecord Ray [orig dir time_])
-
-(defprotocol Material
-  (scatter [mat r-in rec])
-  (emitted [this u v p]))
-
-(defn ray
-  ([orig dir] (->Ray orig dir 0.0))
-  ([orig dir time_] (->Ray orig dir time_)))
-
-(defrecord DiffuseLight [emit]
-  Material
-  (scatter [{:keys [albedo_ fuzz] :as mat}
-            {:keys [time_] :as r-in}
-            {:keys [normal u v p] :as rec}]
-    (let [scatter-direction (v+ normal
-                                (random-unit-vector))]
-      {:ok          false
-       :scattered   (ray p scatter-direction time_)
-       :attenuation (value emit u v p)}))
-  (emitted [this u v p]
-    (value emit u v p)))
-
-(defn diffuse-light [a]
-  (if (satisfies? Texture a)
-    (->DiffuseLight a)
-    (->DiffuseLight (solid-color a))))
 
 (defn get-sphere-uv [this [x y z] u v]
   (let [theta (m/acos (- ^double y))
@@ -359,73 +316,7 @@
                   (->HitRecord (ray-at r root) normal mat-ptr root u v front-face)))))))))
   (center [this time_] center))
 
-(defrecord Lambertian [albedo]
-  Material
-  (scatter [{:keys [albedo_ fuzz] :as mat}
-            {:keys [time_] :as r-in}
-            {:keys [normal u v p] :as rec}]
-    (let [scatter-direction (v+ normal
-                                (random-unit-vector))]
-      {:ok          true
-       :scattered   (ray p scatter-direction time_)
-       :attenuation (value albedo u v p)}))
-  (emitted [this u v p] [0.0 0.0 0.0]))
 
-(defn lambertian
-  ([a] (->Lambertian (if (satisfies? Texture a)
-                       a
-                       (solid-color a)))))
-
-(defrecord Metal [albedo fuzz]
-  Material
-  (scatter [{:keys [albedo fuzz] :as mat}
-            {:keys [orig dir time_] :as r-in}
-            {:keys [normal p] :as rec}]
-    (let [reflected (reflect (unit-vector dir) normal)
-          scattered (ray p (v+ reflected (v* (random-in-unit-sphere) fuzz)) time_)
-          ok (pos? ^double (dot (:dir scattered) normal))]
-      {:ok ok :attenuation albedo :scattered scattered}))
-  (emitted [this u v p] [0.0 0.0 0.0]))
-
-(defn metal [color f]
-  (->Metal color (if (> 1 ^double f) f 1)))
-
-(defrecord Dielectric [ir]
-  Material
-  (scatter [{:keys [ir] :as mat}
-            {:keys [orig dir time_] :as r-in}
-            {:keys [p front-face normal] :as rec}]
-    (let [attenuation [1.0 1.0 1.0]
-          refraction-ratio (if front-face (/ 1.0 ^double ir) ir)
-          unit-direction (unit-vector dir)
-          cos-theta (min ^double (dot (map - unit-direction) normal) 1.0)
-          sin-theta (m/sqrt (- 1.0 (m/pow cos-theta 2)))
-          cannot-refract (> ^double (* ^double refraction-ratio ^double sin-theta) 1.0)
-          direction (if (or cannot-refract (> ^double (reflectance cos-theta refraction-ratio) ^double (rand)))
-                      (reflect unit-direction normal)
-                      (refract unit-direction normal refraction-ratio))]
-      {:ok true
-       :attenuation attenuation
-       :scattered (ray p direction time_)}))
-  (emitted [this u v p] [0.0 0.0 0.0]))
-
-(defn ray-color [{:keys [_ dir] :as r} background world ^double depth]
-  (if (>= 0 depth)
-    [0.0 0.0 0.0]
-    (if-let [{:keys [mat-ptr u v p] :as rec}
-             (hit (->HittableList world) r 0.001 ##Inf {})]
-      (let [emitted (emitted mat-ptr u v p)
-            {:keys [ok attenuation scattered]} (scatter mat-ptr r rec)]
-        (if ok
-          (map * attenuation
-               (ray-color scattered background world (dec depth)))
-          emitted))
-      background)))
-
-;(let [[x y z] (unit-vector dir)
-;      t (* 0.5 (inc ^double y))]
-;  (v+ (v* [1.0 1.0 1.0] (- 1.0 t))
-;      (v* [0.5 0.7 1.0] t))))))
 
 (defn camera [lookfrom lookat vup vfov aspect-ratio
               aperture focus-dist time0 time1]
@@ -454,118 +345,6 @@
      :lens-radius       lens-radius
      :time0             time0
      :time1             time1}))
-
-(defn get-ray [{:keys [u v horizontal vertical
-                       lower-left-corner
-                       origin lens-radius time0 time1]}
-               ^double s ^double t]
-  (let [[x y z] (v* (random-in-unit-disk) lens-radius)
-        offset (v+ (v* u x) (v* v y))]
-    (ray (v+ origin offset)
-         (v- (v+ lower-left-corner
-                 (v* horizontal s)
-                 (v* vertical t))
-             origin
-             offset)
-         (random-double time0 time1))))
-
-(defn v-dist [v1 v2]
-  (m/sqrt (length (v- v1 v2))))
-
-(defn z-fix [objects]
-  (->> objects
-       (sort-by #(v-dist [13 2 3] (:center %)) <)
-       vec))
-
-(defprotocol Noise
-  (noise [this point])
-  (turb [this p depth]))
-
-(defn trilinear-interp [c ^double u ^double v ^double w]
-  (->> (for [^double i [0 1]
-             ^double j [0 1]
-             ^double k [0 1]]
-         (* ^double (+ (* i u) (* (- 1 i) (- 1 u)))
-            ^double (+ (* j v) (* (- 1 j) (- 1 v)))
-            ^double (+ (* k w) (* (- 1 k) (- 1 w)))
-            ^double (get-in c [i j k])))
-       (reduce +)))
-
-(defn perlin-interp [c ^double u ^double v ^double w]
-  (let [[uu vv ww] (mapv #(* ^double %
-                             ^double %
-                             ^double (- 3.0 (* 2.0 ^double %))) [u v w])]
-    (->> (for [^double i [0 1]
-               ^double j [0 1]
-               ^double k [0 1]]
-           (let [weight-v [(- u i) (- v j) (- w k)]]
-             (* ^double (+ ^double (* i ^double uu) ^double (* (- 1 ^double i) ^double (- 1 ^double uu)))
-                ^double (+ ^double (* j ^double vv) ^double (* (- 1 ^double j) ^double (- 1 ^double vv)))
-                ^double (+ ^double (* k ^double ww) ^double (* (- 1 ^double k) ^double (- 1 ^double ww)))
-                ^double (dot (get-in c [i j k]) weight-v))))
-         (reduce +))))
-
-(defrecord Perlin [^long point-count
-                   ranvec
-                   perm-x perm-y perm-z]
-  Noise
-  (noise [{:keys [ranvec perm-x perm-y perm-z]} point]
-    (let [[u v w] (mapv (fn [^double n]
-                          (let [value ^double (- n ^double (m/floor n))]
-                            (* ^double value
-                               ^double value
-                               (- 3 ^double (* 2.0 ^double value)))))
-                        point)
-          [i j k] (mapv #(long (m/floor %)) point)
-          c (->> (for [di [0 1]
-                       dj [0 1]
-                       dk [0 1]]
-                   [di dj dk])
-                 (reduce (fn [acc [di dj dk]]
-                           (assoc-in acc [di dj dk]
-                                     (ranvec (bit-or ^long (perm-x (bit-and (+ ^long i ^long di) 255))
-                                                     ^long (perm-y (bit-and (+ ^long j ^long dj) 255))
-                                                     ^long (perm-z (bit-and (+ ^long k ^long dk) 255))))))
-                         [[[0 0] [0 0]]
-                          [[0 0] [0 0]]]))]
-      (perlin-interp c u v w)))
-  (turb [this point depth]
-    (loop [i 0
-           acc 0.0
-           weight 1.0
-           temp-p point]
-      (if (= i depth)
-        (abs acc)
-        (recur (inc i)
-               (+ acc (* ^double weight
-                         ^double (noise this temp-p)))
-               (* weight 0.5)
-               (v* temp-p 2))))))
-
-(defn perlin-generate-perm []
-  (->> (range 256)
-       shuffle
-       vec))
-
-(defn perlin []
-  (let [point-count 256]
-    (->Perlin point-count
-              (vec (repeatedly point-count #(unit-vector (random-vec3 -1 1))))
-              (perlin-generate-perm)
-              (perlin-generate-perm)
-              (perlin-generate-perm))))
-
-(defrecord NoiseTexture [perlin-noise
-                         ^long scale]
-  Texture
-  (value [this u v p]
-    (v* [1 1 1] (* 0.5
-                   (inc ^double (m/sin ^double (+ (* scale ^double (p 2))
-                                                  (* 10 ^double (turb perlin-noise p 7)))))))))
-
-(defn noise-texture
-  ([] (->NoiseTexture (perlin) 1.0))
-  ([sc] (->NoiseTexture (perlin) sc)))
 
 (defn clamp [^double x ^double mn ^double mx]
   (cond (> mn x) mn

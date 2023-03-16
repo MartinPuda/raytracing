@@ -1,5 +1,6 @@
 (ns raytracing.rotate
   (:require [raytracing.base :refer :all]
+            [raytracing.ray :refer :all]
             [clojure.math :as m])
   (:gen-class))
 

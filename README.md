@@ -14,6 +14,11 @@ Run `(-main)` (30 samples per pixel) or `(-main :samples 10)` for different numb
 
 Rendering can take some time.
 
+### Source files hierarchy:
+base < noise < texture < ray < materials < rotate, translate < scenes < core
+
+base < rectangles < box
+
 ## License
 
 Copyright © 2023

@@ -1,5 +1,6 @@
 (ns raytracing.translate
-  (:require [raytracing.base :refer :all])
+  (:require [raytracing.base :refer :all]
+            [raytracing.ray :refer :all])
   (:gen-class))
 
 (defrecord Translate [ptr offset]

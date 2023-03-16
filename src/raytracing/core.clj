@@ -7,12 +7,27 @@
     [raytracing.rectangles :refer :all]
     [raytracing.scenes :refer :all]
     [raytracing.box :refer :all]
+    [raytracing.ray :refer :all]
+    [raytracing.materials :refer :all]
     [raytracing.translate :refer :all])
   (:import (javax.swing JFrame JPanel)
            (java.awt Dimension BorderLayout Color)
-           (java.awt.image BufferedImage DataBufferByte)
+           (java.awt.image BufferedImage)
            (java.util.concurrent CountDownLatch))
   (:gen-class))
+
+(defn ray-color [{:keys [_ dir] :as r} background world ^double depth]
+  (if (>= 0 depth)
+    [0.0 0.0 0.0]
+    (if-let [{:keys [mat-ptr u v p] :as rec}
+             (hit (->HittableList world) r 0.001 ##Inf {})]
+      (let [emitted (emitted mat-ptr u v p)
+            {:keys [ok attenuation scattered]} (scatter mat-ptr r rec)]
+        (if ok
+          (map * attenuation
+               (ray-color scattered background world (dec depth)))
+          emitted))
+      background)))
 
 (defn display-image [img w h]
   (let [ppm-panel (doto (proxy [JPanel] []
@@ -33,7 +48,7 @@
     (.countDown latch)))
 
 (defn -main [& {:keys [samples new-camera]
-                :or   {samples 30 new-camera false}}]
+                :or   {samples 10 new-camera false}}]
   (let [aspect-ratio 1.0;(/ 16.0 9.0) ;1.0
         image-width 200 ;400, 600
         image-height (long (/ image-width aspect-ratio))
@@ -41,7 +56,7 @@
         image-height-dec (dec ^long image-height)
         samples-per-pixel samples
         max-depth 50
-        im :cornell-box                                ;:two-perlin-spheres                              ;world
+        im :final-scene                              ;:two-perlin-spheres                              ;world
         {:keys [world lookfrom lookat vfov aperture background]
          :or   {lookfrom [13 2 3]
                 lookat   [0 0 0]
@@ -61,7 +76,16 @@
                            :background [0.0 0.0 0.0]
                            :lookfrom [278 278 -800]
                            :lookat [278 278 0]
-                           :vfov 40.0}})
+                           :vfov 40.0}
+             :cornell-smoke {:world (cornell-smoke)
+                             :lookfrom [278 278 -800]
+                             :lookat [278 278 0]
+                             :vfov 40.0}
+             :final-scene {:world (final-scene)
+                           :background [0 0 0]
+                           :lookfrom [478 278 -600]
+                           :lookat [278 278 0]
+                           :vfov 40}})
         vup [0 1 0]
         dist-to-focus 10.0
         cam (camera lookfrom lookat vup vfov aspect-ratio aperture dist-to-focus 0.0 1.0) ;500 500
