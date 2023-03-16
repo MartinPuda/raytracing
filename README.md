@@ -12,7 +12,7 @@ https://raytracing.github.io/books/RayTracingTheNextWeek.html
 
 Run `(-main)` (30 samples per pixel) or `(-main :samples 10)` for different number of samples.
 
-Rendering can take some time, see output for informations about progress.
+Rendering can take some time.
 
 ## License
 
