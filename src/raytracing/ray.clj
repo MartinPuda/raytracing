@@ -9,8 +9,6 @@
   ([orig dir] (->Ray orig dir 0.0))
   ([orig dir time_] (->Ray orig dir time_)))
 
-
-
 (defn get-ray [{:keys [u v horizontal vertical
                        lower-left-corner
                        origin lens-radius time0 time1]}

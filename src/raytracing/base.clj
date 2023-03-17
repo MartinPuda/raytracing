@@ -114,9 +114,9 @@
   Hittable
   (hit [this r t-min t-max rec]
     (when (hit box r t-min t-max rec)
-      (let [hit-left (hit this r t-min t-max rec)
-            hit-right (hit this r t-min (if hit-left (:t rec) t-max) rec)]
-        (or hit-left hit-right))))
+      (let [{:keys [t] :as hit-left} (hit this r t-min t-max rec)
+            hit-right (hit this r t-min (if hit-left t t-max) rec)]
+        (or hit-right hit-left))))
   (bounding-box [this time0 time1 output-box-ptr]
     box))
 
@@ -168,7 +168,6 @@
                            (== ^double axis 1) box-y-compare
                            :else box-z-compare)
          object-span ^double (- ^double end ^double start)
-         _ (prn objects (objects start))
          [left right] (cond (== ^double object-span 1)
                             [(objects start) (objects start)]
                             (== object-span 2)
@@ -316,8 +315,6 @@
                   (->HitRecord (ray-at r root) normal mat-ptr root u v front-face)))))))))
   (center [this time_] center))
 
-
-
 (defn camera [lookfrom lookat vup vfov aspect-ratio
               aperture focus-dist time0 time1]
   (let [theta (m/to-radians vfov)
@@ -376,4 +373,3 @@
                       {:keys [front-face normal]} (set-face-normal r outward-normal)]
                   (->HitRecord (ray-at r root) normal mat-ptr root u v front-face)))))))))
   (center [this time_] center))
-

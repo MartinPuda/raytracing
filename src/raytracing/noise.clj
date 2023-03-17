@@ -80,5 +80,3 @@
               (perlin-generate-perm)
               (perlin-generate-perm)
               (perlin-generate-perm))))
-
-

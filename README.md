@@ -19,6 +19,10 @@ base < noise < texture < ray < materials < rotate, translate < scenes < core
 
 base < rectangles < box
 
+### In progress:
+* bvhnode
+* performance
+
 ## License
 
 Copyright © 2023

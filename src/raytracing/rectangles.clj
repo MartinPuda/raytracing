@@ -19,16 +19,14 @@
     (let [[^double o-x ^double o-y ^double o-z] orig
           [^double d-x ^double d-y ^double d-z] dir
           t ^double (/ ^double (- k o-z) d-z)]
-      (if (or (< t ^double t-min)
-              (> t ^double t-max))
-        false
+      (when-not (or (< t ^double t-min)
+                    (> t ^double t-max))
         (let [x ^double (+ o-x ^double (* t d-x))
               y ^double (+ o-y ^double (* t d-y))]
-          (if (or (< x ^double x0)
-                  (> x ^double x1)
-                  (< y ^double y0)
-                  (> y ^double y1))
-            false
+          (when-not (or (< x ^double x0)
+                        (> x ^double x1)
+                        (< y ^double y0)
+                        (> y ^double y1))
             (let [u ^double (/ ^double (- x x0)
                                ^double (- x1 x0))
                   v ^double (/ ^double (- y y0)
@@ -58,16 +56,14 @@
     (let [[^double o-x ^double o-y ^double o-z] orig
           [^double d-x ^double d-y ^double d-z] dir
           t ^double (/ ^double (- k o-y) d-y)]
-      (if (or (< t ^double t-min)
-              (> t ^double t-max))
-        false
+      (when-not (or (< t ^double t-min)
+                    (> t ^double t-max))
         (let [x ^double (+ o-x ^double (* t d-x))
               z ^double (+ o-z ^double (* t d-z))]
-          (if (or (< x ^double x0)
-                  (> x ^double x1)
-                  (< z ^double z0)
-                  (> z ^double z1))
-            false
+          (when-not (or (< x ^double x0)
+                        (> x ^double x1)
+                        (< z ^double z0)
+                        (> z ^double z1))
             (let [u ^double (/ ^double (- x x0)
                                ^double (- x1 x0))
                   v ^double (/ ^double (- z z0)

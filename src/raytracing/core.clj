@@ -49,43 +49,43 @@
 
 (defn -main [& {:keys [samples new-camera]
                 :or   {samples 10 new-camera false}}]
-  (let [aspect-ratio 1.0;(/ 16.0 9.0) ;1.0
-        image-width 200 ;400, 600
+  (let [aspect-ratio 1.0                                    ;(/ 16.0 9.0) ;1.0
+        image-width 400                                     ;400, 600
         image-height (long (/ image-width aspect-ratio))
         image-width-dec (dec ^long image-width)
         image-height-dec (dec ^long image-height)
         samples-per-pixel samples
         max-depth 50
-        im :final-scene                              ;:two-perlin-spheres                              ;world
+        im :final-scene                                   ;:two-perlin-spheres                              ;world
         {:keys [world lookfrom lookat vfov aperture background]
-         :or   {lookfrom [13 2 3]
-                lookat   [0 0 0]
-                aperture 0.0
-                vfov     20.0
+         :or   {lookfrom   [13 2 3]
+                lookat     [0 0 0]
+                aperture   0.0
+                vfov       20.0
                 background [0.70 0.80 1.0]}}
         (im {:world              {:world    (random-scene)
                                   :aperture 0.1}
              :two-spheres        {:world (two-spheres)}
              :two-perlin-spheres {:world (two-perlin-spheres)}
              :earth              {:world (earth)}
-             :simple-light {:world (simple-light)
-                            :background [0.0 0.0 0.0]
-                            :lookfrom [26 3 6]
-                            :lookat [0 2 0]}
-             :cornell-box {:world (cornell-box)
-                           :background [0.0 0.0 0.0]
-                           :lookfrom [278 278 -800]
-                           :lookat [278 278 0]
-                           :vfov 40.0}
-             :cornell-smoke {:world (cornell-smoke)
-                             :lookfrom [278 278 -800]
-                             :lookat [278 278 0]
-                             :vfov 40.0}
-             :final-scene {:world (final-scene)
-                           :background [0 0 0]
-                           :lookfrom [478 278 -600]
-                           :lookat [278 278 0]
-                           :vfov 40}})
+             :simple-light       {:world      (simple-light)
+                                  :background [0.0 0.0 0.0]
+                                  :lookfrom   [26 3 6]
+                                  :lookat     [0 2 0]}
+             :cornell-box        {:world      (cornell-box)
+                                  :background [0.0 0.0 0.0]
+                                  :lookfrom   [278 278 -800]
+                                  :lookat     [278 278 0]
+                                  :vfov       40.0}
+             :cornell-smoke      {:world    (cornell-smoke)
+                                  :lookfrom [278 278 -800]
+                                  :lookat   [278 278 0]
+                                  :vfov     40.0}
+             :final-scene        {:world      (final-scene)
+                                  :background [0 0 0]
+                                  :lookfrom   [478 278 -600]
+                                  :lookat     [278 278 0]
+                                  :vfov       40}})
         vup [0 1 0]
         dist-to-focus 10.0
         cam (camera lookfrom lookat vup vfov aspect-ratio aperture dist-to-focus 0.0 1.0) ;500 500
@@ -98,27 +98,51 @@
         (Thread. ^Runnable
                  (->Worker
                    (fn []
-                     (dotimes [x image-width]
-                       (let [pixel-color
-                             (reduce v+ [0 0 0]
-                                     (repeatedly
-                                       samples-per-pixel
-                                       #(ray-color
-                                          (get-ray cam
-                                                   (/ ^double (+ ^long x ^double (rand))
-                                                      image-width-dec)
-                                                   (/ ^double (+ ^long y ^double (rand))
-                                                      image-height-dec))
-                                          background
-                                          world
-                                          max-depth)))]
-                         (let [scale (/ 1.0 ^long samples-per-pixel)
-                               [r g b] (map (fn [x] (* ^double (clamp ^double (m/sqrt x) 0.0 0.999) 255))
-                                            (v* pixel-color scale))]
-                           (.setRGB buffered-image x (- ^long (+ ^long image-height 30) y)
-                                    (.getRGB (Color. ^int r
-                                                     ^int g
-                                                     ^int b)))))))
+                     (let [scale (/ 1.0 ^long samples-per-pixel)
+                           pxs (for [x (range image-width)]
+                                 (->> (v* (reduce v+ [0 0 0]
+                                                  (repeatedly
+                                                    samples-per-pixel
+                                                    #(ray-color
+                                                       (get-ray cam
+                                                                (/ ^double (+ ^long x ^double (rand))
+                                                                   image-width-dec)
+                                                                (/ ^double (+ ^long y ^double (rand))
+                                                                   image-height-dec))
+                                                       background
+                                                       world
+                                                       max-depth)))
+                                          scale)
+
+                                      (map (fn [^double x] (* ^double (clamp ^double (m/sqrt x) 0.0 0.999) 255)))
+                                      ((fn [[^int r ^int g ^int b]] (.getRGB (Color. r g b))))))
+
+                           rgb-array (int-array pxs)]
+                       (.setRGB buffered-image 0
+                                (- ^long (+ ^long image-height 30) y)
+                                image-width 1 rgb-array 0 0)))
+                   ;(fn []
+                   ;  (dotimes [x image-width]
+                   ;    (let [pixel-color
+                   ;          (reduce v+ [0 0 0]
+                   ;                  (repeatedly
+                   ;                    samples-per-pixel
+                   ;                    #(ray-color
+                   ;                       (get-ray cam
+                   ;                                (/ ^double (+ ^long x ^double (rand))
+                   ;                                   image-width-dec)
+                   ;                                (/ ^double (+ ^long y ^double (rand))
+                   ;                                   image-height-dec))
+                   ;                       background
+                   ;                       world
+                   ;                       max-depth)))]
+                   ;      (let [scale (/ 1.0 ^long samples-per-pixel)
+                   ;            [r g b] (map (fn [x] (* ^double (clamp ^double (m/sqrt x) 0.0 0.999) 255))
+                   ;                         (v* pixel-color scale))]
+                   ;        (.setRGB buffered-image x (- ^long (+ ^long image-height 30) y)
+                   ;                 (.getRGB (Color. ^int r
+                   ;                                  ^int g
+                   ;                                  ^int b)))))))
                    ;   (.countDown latch)))))
                    latch))))
     (.await latch)
@@ -233,3 +257,22 @@
 ;2 kostky, 100 samplu na 400
 ;(time (-main))
 ;"Elapsed time: 415119.3728 msecs"
+
+;two spheres- 25 samplu, 400 w, depth 50
+;"Elapsed time: 58928.5308 msecs"
+;(time (-main))
+;"Elapsed time: 41847.0845 msecs"
+;(time (-main))
+;"Elapsed time: 37102.6371 msecs"
+;(time (-main))
+;"Elapsed time: 47579.758 msecs"
+
+;setpixels
+;(time (-main))
+;"Elapsed time: 35274.5043 msecs"
+;(time (-main))
+;"Elapsed time: 40456.5618 msecs"
+
+;gulocky, 500 samplu na 400
+;(time (-main))
+;"Elapsed time: 665987.0818 msecs"
