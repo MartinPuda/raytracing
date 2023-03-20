@@ -2,7 +2,7 @@
   (:require [raytracing.base :refer :all]
             [raytracing.texture :refer :all]
             [raytracing.ray :refer :all]
-           [clojure.math :as m])
+            [clojure.math :as m])
   (:gen-class))
 
 (defprotocol Material
@@ -21,10 +21,10 @@
        :attenuation (value albedo u v p)}))
   (emitted [this u v p] [0.0 0.0 0.0]))
 
-(defn lambertian
-  ([a] (->Lambertian (if (satisfies? Texture a)
-                       a
-                       (solid-color a)))))
+(defn lambertian [a]
+  (if (satisfies? Texture a)
+    (->Lambertian a)
+    (->Lambertian (solid-color a))))
 
 (defrecord Metal [albedo fuzz]
   Material
@@ -54,9 +54,9 @@
           direction (if (or cannot-refract (> ^double (reflectance cos-theta refraction-ratio) ^double (rand)))
                       (reflect unit-direction normal)
                       (refract unit-direction normal refraction-ratio))]
-      {:ok true
+      {:ok          true
        :attenuation attenuation
-       :scattered (ray p direction time_)}))
+       :scattered   (ray p direction time_)}))
   (emitted [this u v p] [0.0 0.0 0.0]))
 
 (defrecord DiffuseLight [emit]
@@ -80,8 +80,8 @@
 (defrecord Isotropic [albedo]
   Material
   (scatter [this {:keys [p time_]} {:keys [u v p]}]
-    {:ok true
-     :scattered (ray p (random-in-unit-sphere) time_)
+    {:ok          true
+     :scattered   (ray p (random-in-unit-sphere) time_)
      :attenuation (value albedo u v p)})
   (emitted [this u v p] [0.0 0.0 0.0]))
 

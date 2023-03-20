@@ -139,30 +139,17 @@
         pertext (noise-texture 0.1)
         white (lambertian [0.73 0.73 0.73])
         boxes2 (repeatedly 1000 #(->Sphere (random-vec3 0 165) 10 white))]
-
-      [;(bvhnode (->HittableList boxes1) 0.0 1.0)
-       (xz-rect 123 423 147 412 554 light)
-       (moving-sphere center1 center2 0 1 50 moving-sphere-material)
-       (->Sphere [260 150 45] 50 (->Dielectric 1.5))
-       (->Sphere [0 150 145] 50 (metal [0.8 0.8 0.9] 1.0))
-       boundary
-       (constant-medium boundary 0.2 [0.0 0.4 0.9])
-       (constant-medium (->Sphere [0 0 0] 5000 (->Dielectric 1.5))
-                        0.0001 [1 1 1])
-       (->Sphere [400 200 400] 100 emat)
-       (->Sphere [220 280 300] 80 (lambertian pertext))]))
-      ;(conj (take 50 boxes1)
-      ;      (xz-rect 123 423 147 412 554 light))))
-      ;[(xz-rect 123 423 147 412 554 light)
-      ; (->Sphere [400 200 400] 100 emat)]))
-      ; (->Sphere [220 280 300] 80 (lambertian pertext))
-      ; (->Sphere [0 150 145] 50 (metal [0.8 0.8 0.9] 1.0))
-      ; (moving-sphere center1 center2 0 1 50 moving-sphere-material)]))
-    ;   boundary
-    ;   (->Sphere [260 150 45] 50 (->Dielectric 1.5))]
-    ;boxes1))
-       ;(-> (bvhnode (->HittableList boxes2) 0.0 1.0)
-       ;    (rotate-y 15)
-       ;    (translate [-100 270 395]))
-
-
+    [(bvhnode (->HittableList boxes1) 0 1)
+     (xz-rect 123 423 147 412 554 light)
+     (moving-sphere center1 center2 0 1 50 moving-sphere-material)
+     (->Sphere [260 150 45] 50 (->Dielectric 1.5))
+     (->Sphere [0 150 145] 50 (metal [0.8 0.8 0.9] 1.0))
+     boundary
+     (constant-medium boundary 0.2 [0.0 0.4 0.9])
+     (constant-medium (->Sphere [0 0 0] 5000 (->Dielectric 1.5))
+                      0.0001 [1 1 1])
+     (->Sphere [400 200 400] 100 emat)
+     (->Sphere [220 280 300] 80 (lambertian pertext))
+     (-> (bvhnode (->HittableList boxes2) 0.0 1.0)
+         (rotate-y 15)
+         (translate [-100 270 395]))]))

@@ -13,7 +13,9 @@
   (:import (javax.swing JFrame JPanel)
            (java.awt Dimension BorderLayout Color)
            (java.awt.image BufferedImage)
-           (java.util.concurrent CountDownLatch))
+           (java.util.concurrent CountDownLatch)
+           (raytracing utils)
+           (clojure.lang IFn))
   (:gen-class))
 
 (defn ray-color [{:keys [_ dir] :as r} background world ^double depth]
@@ -47,16 +49,16 @@
     (work)
     (.countDown latch)))
 
-(defn -main [& {:keys [samples new-camera]
-                :or   {samples 10 new-camera false}}]
+(defn -main [& {:keys [samples]
+                :or   {samples 5}}]
   (let [aspect-ratio 1.0                                    ;(/ 16.0 9.0) ;1.0
-        image-width 400                                     ;400, 600
+        image-width 200                                     ;400, 600
         image-height (long (/ image-width aspect-ratio))
         image-width-dec (dec ^long image-width)
         image-height-dec (dec ^long image-height)
         samples-per-pixel samples
         max-depth 50
-        im :final-scene                                   ;:two-perlin-spheres                              ;world
+        im :final-scene                                    ;:two-perlin-spheres                              ;world
         {:keys [world lookfrom lookat vfov aperture background]
          :or   {lookfrom   [13 2 3]
                 lookat     [0 0 0]
@@ -82,7 +84,7 @@
                                   :lookat   [278 278 0]
                                   :vfov     40.0}
              :final-scene        {:world      (final-scene)
-                                  :background [0 0 0]
+                                  :background [0.0 0.0 0.0]
                                   :lookfrom   [478 278 -600]
                                   :lookat     [278 278 0]
                                   :vfov       40}})
@@ -92,58 +94,38 @@
         buffered-image (BufferedImage. 1000
                                        1000
                                        BufferedImage/TYPE_INT_RGB)
-        latch (CountDownLatch. image-height)]
+        latch (CountDownLatch. image-height)
+        rc (fn [^long x ^long y]
+             (ray-color
+               (get-ray cam
+                        (/ ^double (+ ^long x ^double (rand))
+                           image-width-dec)
+                        (/ ^double (+ ^long y ^double (rand))
+                           image-height-dec))
+               background
+               world
+               max-depth))
+        scale (/ 1.0 ^long samples-per-pixel)
+        clamp-fn (fn [^double x] (clamp ^double (m/sqrt x) 0.0 0.999))
+        rgb-fn (fn [[^float r ^float g ^float b]] (.getRGB (Color. r g b)))]
     (dotimes [y image-height]
       (.start
         (Thread. ^Runnable
                  (->Worker
                    (fn []
-                     (let [scale (/ 1.0 ^long samples-per-pixel)
-                           pxs (for [x (range image-width)]
-                                 (->> (v* (reduce v+ [0 0 0]
-                                                  (repeatedly
-                                                    samples-per-pixel
-                                                    #(ray-color
-                                                       (get-ray cam
-                                                                (/ ^double (+ ^long x ^double (rand))
-                                                                   image-width-dec)
-                                                                (/ ^double (+ ^long y ^double (rand))
-                                                                   image-height-dec))
-                                                       background
-                                                       world
-                                                       max-depth)))
-                                          scale)
-
-                                      (map (fn [^double x] (* ^double (clamp ^double (m/sqrt x) 0.0 0.999) 255)))
-                                      ((fn [[^int r ^int g ^int b]] (.getRGB (Color. r g b))))))
-
-                           rgb-array (int-array pxs)]
+                     (let [pxs (amap ^ints (int-array image-width) idx ret
+                                     (->> (loop [s 0
+                                                 acc [0.0 0.0 0.0]]
+                                            (if (= s samples-per-pixel)
+                                              (v* acc scale)
+                                              (recur (inc s)
+                                                     (v+ acc (rc idx y)))))
+                                          (map clamp-fn)
+                                          rgb-fn))]
                        (.setRGB buffered-image 0
                                 (- ^long (+ ^long image-height 30) y)
-                                image-width 1 rgb-array 0 0)))
-                   ;(fn []
-                   ;  (dotimes [x image-width]
-                   ;    (let [pixel-color
-                   ;          (reduce v+ [0 0 0]
-                   ;                  (repeatedly
-                   ;                    samples-per-pixel
-                   ;                    #(ray-color
-                   ;                       (get-ray cam
-                   ;                                (/ ^double (+ ^long x ^double (rand))
-                   ;                                   image-width-dec)
-                   ;                                (/ ^double (+ ^long y ^double (rand))
-                   ;                                   image-height-dec))
-                   ;                       background
-                   ;                       world
-                   ;                       max-depth)))]
-                   ;      (let [scale (/ 1.0 ^long samples-per-pixel)
-                   ;            [r g b] (map (fn [x] (* ^double (clamp ^double (m/sqrt x) 0.0 0.999) 255))
-                   ;                         (v* pixel-color scale))]
-                   ;        (.setRGB buffered-image x (- ^long (+ ^long image-height 30) y)
-                   ;                 (.getRGB (Color. ^int r
-                   ;                                  ^int g
-                   ;                                  ^int b)))))))
-                   ;   (.countDown latch)))))
+                                image-width 1 ^ints pxs
+                                0 0)))
                    latch))))
     (.await latch)
     (display-image buffered-image image-width image-height)))
@@ -267,6 +249,39 @@
 ;(time (-main))
 ;"Elapsed time: 47579.758 msecs"
 
+;two spheres s kusem v Jave
+;"Elapsed time: 34865.9304 msecs"
+;"Elapsed time: 37375.4996 msecs"
+;"Elapsed time: 38493.4375 msecs"
+
+;cornell-box s kusem v Jave, 25 samplu na 400
+;"Elapsed time: 110203.4634 msecs"
+
+;cornell-box bez Javy amap, 25 samplu na 400
+;"Elapsed time: 94163.3877 msecs"
+;"Elapsed time: 90874.5917 msecs"
+;"Elapsed time: 88458.791801 msecs" (s Math/random)
+
+;cornell-box s kusem v Jave, 50 samplu na 200
+;"Elapsed time: 54061.5173 msecs"
+
+;cornell-box bez Javy amap, 50 samplu na 200
+;"Elapsed time: 42820.3253 msecs"
+;"Elapsed time: 44497.7521 msecs"
+
+;cornell-box s kusem v Jave, 100 samplu na 200
+;"Elapsed time: 110612.1648 msecs"
+
+;cornell-box s kusem v Jave, 200 samplu na 200
+;"Elapsed time: 239491.3995 msecs"
+
+;cornell-box bez Javy, 200 samplu na 200
+;"Elapsed time: 202324.796 msecs"
+;"Elapsed time: 183997.7448 msecs"
+
+;cornell-box bez Javy amap, 200 samplu na 200
+;"Elapsed time: 209734.0942 msecs"
+
 ;setpixels
 ;(time (-main))
 ;"Elapsed time: 35274.5043 msecs"
@@ -276,3 +291,58 @@
 ;gulocky, 500 samplu na 400
 ;(time (-main))
 ;"Elapsed time: 665987.0818 msecs"
+
+;final gulocky, 10sp na 400
+;"Elapsed time: 14102.4992 msecs"
+;"Elapsed time: 18790.5017 msecs"
+;"Elapsed time: 31063.8751 msecs"
+
+;final gulocky, 10samplu na 400 w/ loop
+;"Elapsed time: 10761.8985 msecs"
+;"Elapsed time: 13142.283601 msecs"
+;"Elapsed time: 13489.7327 msecs"
+;"Elapsed time: 16093.078399 msecs"
+;"Elapsed time: 21211.102899 msecs"
+
+;final gulocky, 10samplu na 400 w/ loop, vlastni rgb prevod
+;"Elapsed time: 11745.8601 msecs"
+;"Elapsed time: 12572.0935 msecs"
+;"Elapsed time: 12609.4836 msecs"
+;"Elapsed time: 13580.5856 msecs"
+;"Elapsed time: 16112.0983 msecs"
+
+;final gulocky, 10samplu na 400 w/ loop, loop akumulace a nasledny convert int-array
+;"Elapsed time: 11873.1116 msecs"
+;"Elapsed time: 12152.4105 msecs"
+;"Elapsed time: 12451.2062 msecs"
+;"Elapsed time: 12614.6914 msecs"
+;"Elapsed time: 13864.8733 msecs"
+;"Elapsed time: 15142.1228 msecs"
+;"Elapsed time: 15879.3622 msecs"
+;"Elapsed time: 17035.1659 msecs" II
+;"Elapsed time: 17133.8049 msecs"
+;"Elapsed time: 18154.5528 msecs" II
+;"Elapsed time: 19624.4983 msecs"
+;"Elapsed time: 21850.4542 msecs" II
+
+;final gulocky, 10samplu na 400 w/ loop, loop akumulace a amap
+;"Elapsed time: 12149.7333 msecs"
+;"Elapsed time: 14120.275 msecs"
+;"Elapsed time: 15675.0424 msecs"
+;"Elapsed time: 16111.7951 msecs"
+
+;final gulocky, 10 samplu na 400 w/loop a kusem v Jave
+;"Elapsed time: 11041.6555 msecs"
+;"Elapsed time: 11106.0236 msecs"
+;"Elapsed time: 11147.6397 msecs"
+;"Elapsed time: 11891.557 msecs"
+;"Elapsed time: 11952.4203 msecs"
+;"Elapsed time: 27538.8398 msecs"
+
+;final scene, 5 samples, 400
+;"Elapsed time: 8879.9814 msecs"
+;"Elapsed time: 11506.7353 msecs"
+;"Elapsed time: 12377.4107 msecs"
+
+; final scene, 500 samples na 400 (rozhodne vic nez 25 minut)
+;"Elapsed time: 2807163.361 msecs"

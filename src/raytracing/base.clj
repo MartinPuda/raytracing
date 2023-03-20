@@ -4,6 +4,7 @@
   (:gen-class))
 
 (set! *unchecked-math* :warn-on-boxed)
+(set! *warn-on-reflection* true)
 
 ;;;; Vector functions
 
@@ -60,12 +61,20 @@
   (hit [this {:keys [orig dir]} t-min t-max rec]
     (reduce (fn [{:keys [t-min t-max]} a]
               (let [invD ^double (/ 1.0 ^double (dir a))
-                    t0 ^double (if (neg? invD)
-                                 (- ^double (maximum a) (* ^double (orig a) invD))
-                                 (- ^double (minimum a) (* ^double (orig a) invD)))
-                    t1 ^double (if (neg? invD)
-                                 (- ^double (minimum a) (* ^double (orig a) invD))
-                                 (- ^double (maximum a) (* ^double (orig a) invD)))
+                    t0 ^double
+                       ;(if (neg? invD)
+                       ;          (- ^double (maximum a) (* ^double (orig a) invD))
+                       ;          (- ^double (minimum a) (* ^double (orig a) invD)))
+                       (* invD (- (minimum a) (orig a)))
+
+                    t1 ^double
+                       ;(if (neg? invD)
+                       ;          (- ^double (minimum a) (* ^double (orig a) invD))
+                       ;          (- ^double (maximum a) (* ^double (orig a) invD)))
+                       (* invD (- (maximum a) (orig a)))
+                    temp t1
+                    t1 (if (< invD 0.00) t0 t1)
+                    t0 (if (< invD 0.00) temp t0)
                     t-min (if (> ^double t0 ^double t-min) t0 t-min)
                     t-max (if (< ^double t1 ^double t-max) t1 t-max)]
                 (if (<= ^double t-max ^double t-min)
@@ -114,77 +123,52 @@
   Hittable
   (hit [this r t-min t-max rec]
     (when (hit box r t-min t-max rec)
-      (let [{:keys [t] :as hit-left} (hit this r t-min t-max rec)
-            hit-right (hit this r t-min (if hit-left t t-max) rec)]
+      ;(prn "box-hit")
+      (let [{:keys [t] :as hit-left} (hit left r t-min t-max rec)
+            hit-right (hit right r t-min (if hit-left t t-max) rec)]
         (or hit-right hit-left))))
   (bounding-box [this time0 time1 output-box-ptr]
     box))
 
 (defn random-double
-  ([] (rand))
-  ([^double mn ^double mx] (+ mn (* (- mx mn) ^double (rand)))))
+  ([] (Math/random))
+  ([^double mn ^double mx] (+ mn (* (- mx mn) ^double (Math/random)))))
 
 (defn random-int [min_ max_]
   (int (random-double min_ (inc ^double max_))))
 
-;(defn box-compare [a b axis]
-;  ;(prn a b axis)
-;  (let [box-a (bounding-box a 0 0 nil)
-;        box-b (bounding-box b 0 0 nil)]
-;    ;(if (or (not box-a) (not box-b))
-;    ;  (throw (Exception. "No bounding box in bvh_node constructor.\n")))
-;    (< ^double ((:minimum box-a) axis)
-;       ^double ((:minimum box-b) axis))))
-;
-;(defn box-x-compare [a b]
-;  (box-compare a b 0))
-;
-;(defn box-y-compare [a b]
-;  (box-compare a b 1))
-;
-;(defn box-z-compare [a b]
-;  (box-compare a b 2))
-
-(defn box-compare [a axis]
-    ((:minimum (bounding-box a 0 0 nil)) axis))
-
-(defn box-x-compare [a]
-  (box-compare a 0))
-
-(defn box-y-compare [a]
-  (box-compare a 1))
-
-(defn box-z-compare [a]
-  (box-compare a 2))
+(defn box-compare [axis]
+  (fn [a b] (< ((:minimum (bounding-box a 0 0 nil)) axis)
+               ((:minimum (bounding-box b 0 0 nil)) axis))))
 
 (defn bvhnode
   ([list_ time0 time1] (bvhnode (:objects list_)
-                                0 (count (:objects list_)) time0 time1))
+                                0 (count (:objects list_))
+                                time0 time1))
   ([src-objects start end time0 time1]
-   ;(prn (vec src-objects) "\n" ((vec src-objects) start))
    (let [objects (vec src-objects)
-         axis (random-int 0 2)
-         comparator_ (cond (zero? ^double axis) box-x-compare
-                           (== ^double axis 1) box-y-compare
-                           :else box-z-compare)
-         object-span ^double (- ^double end ^double start)
-         [left right] (cond (== ^double object-span 1)
+         axis (rand-int 2)
+         comparator_ (box-compare axis)
+         object-span ^long (- ^long end
+                              ^long start)
+         [left right] (cond (= object-span 1)
                             [(objects start) (objects start)]
-                            (== object-span 2)
+                            (= object-span 2)
                             (if (comparator_ (objects start)
-                                             (objects (inc ^double start)))
-                              [(objects start) (objects (inc ^double start))]
-                              [(objects (inc ^double start)) (objects start)])
-                            :else (let [sorted-obj (sort-by comparator_ < (objects start))
+                                             (objects (inc start)))
+                              [(objects start)
+                               (objects (inc start))]
+                              [(objects (inc start))
+                               (objects start)])
+                            :else (let [sorted-obj (sort-by #((:minimum (bounding-box % 0 0 nil)) axis)
+                                                            < objects)
 
-                                        mid (+ ^double start ^double (/ object-span 2))]
+                                        mid (int (Math/ceil (+ start
+                                                               ^double (/ object-span 2))))]
                                     [(bvhnode sorted-obj start mid time0 time1)
                                      (bvhnode sorted-obj mid end time0 time1)]))
          box-left (bounding-box left time0 time1 nil)
          box-right (bounding-box right time0 time1 nil)]
-     ;(if (or (not box-left)
-     ;        (not box-right))
-     ;  (throw (Exception. "No bounding box in bvh_node constructor.\n"))
        (->BvhNode left right (surrounding-box box-left box-right)))))
 
 (defn ray-at [{:keys [orig dir]} t]
@@ -198,7 +182,7 @@
      :normal     (if front-face outward-normal (map - outward-normal))}))
 
 (defn random-vec3
-  ([] [(rand) (rand) (rand)])
+  ([] [(Math/random) (Math/random) (Math/random)])
   ([mn mx] [(random-double mn mx)
             (random-double mn mx)
             (random-double mn mx)]))
@@ -250,45 +234,6 @@
     {:u (/ phi (* 2 m/PI))
      :v (/ theta m/PI)}))
 
-(defrecord MovingSphere [center0 center1
-                         ^double time0
-                         ^double time1
-                         ^double radius
-                         mat-ptr]
-  Hittable
-  (hit [{:keys [radius mat-ptr] :as sphere}
-        {:keys [orig dir time_] :as r}
-        t-min
-        t-max
-        rec]
-    (let [oc (v- orig (center sphere time_))
-          a (length-squared dir)
-          half-b ^double (dot oc dir)
-          c (- ^double (length-squared oc) ^double (m/pow radius 2))
-          discriminant (- ^double (m/pow half-b 2) ^double (* ^double a ^double c))]
-      (when (pos? ^double discriminant)
-        (let [sqrtd (m/sqrt discriminant)
-              root (/ ^double (- (- ^double half-b) ^double sqrtd) ^double a)]
-          (if (> t-max root t-min)
-            (let [outward-normal (vd (v- (ray-at r root) (center sphere time_)) radius)
-                  {:keys [u v]} (get-sphere-uv sphere outward-normal (:u rec) (:v rec))
-                  {:keys [front-face normal]} (set-face-normal r outward-normal)]
-              (->HitRecord (ray-at r root) normal mat-ptr root u v front-face))
-            (let [root (/ ^double (+ ^double (- ^double half-b) root) ^double a)]
-              (when (> t-max root t-min)
-                (let [outward-normal (vd (v- (ray-at r root) (center sphere time_)) radius)
-                      {:keys [u v]} (get-sphere-uv sphere outward-normal (:u rec) (:v rec))
-                      {:keys [front-face normal]} (set-face-normal r outward-normal)]
-                  (->HitRecord (ray-at r root) normal mat-ptr root u v front-face)))))))))
-  (center [this time_]
-    (v+ center0
-        (v* (v- center1 center0)
-            (/ (- ^double time_ ^double time0)
-               (- ^double time1 ^double time0))))))
-
-(defn moving-sphere [center0 center1 time0 time1 radius mat_ptr]
-  (->MovingSphere center0 center1 time0 time1 radius mat_ptr))
-
 (defrecord Sphere [center radius mat-ptr]
   Hittable
   (hit [{:keys [center radius mat-ptr] :as sphere}
@@ -313,7 +258,56 @@
                       {:keys [u v]} (get-sphere-uv sphere outward-normal (:u rec) (:v rec))
                       {:keys [front-face normal]} (set-face-normal r outward-normal)]
                   (->HitRecord (ray-at r root) normal mat-ptr root u v front-face)))))))))
+  (bounding-box [{:keys [center radius]} time0 time1 output-box]
+    (aabb (v- center
+              [radius radius radius])
+          (v+ center
+              [radius radius radius])))
   (center [this time_] center))
+
+(defrecord MovingSphere [center0 center1
+                         ^double time0
+                         ^double time1
+                         ^double radius
+                         mat-ptr]
+  Hittable
+  (hit [{:keys [radius mat-ptr] :as this}
+        {:keys [orig dir time_] :as r}
+        t-min
+        t-max
+        rec]
+    (let [oc (v- orig (center this time_))
+          a (length-squared dir)
+          half-b ^double (dot oc dir)
+          c (- ^double (length-squared oc) ^double (m/pow radius 2))
+          discriminant (- ^double (m/pow half-b 2) ^double (* ^double a ^double c))]
+      (when (pos? ^double discriminant)
+        (let [sqrtd (m/sqrt discriminant)
+              root (/ ^double (- (- ^double half-b) ^double sqrtd) ^double a)]
+          (if (> t-max root t-min)
+            (let [outward-normal (vd (v- (ray-at r root) (center this time_)) radius)
+                  {:keys [u v]} (get-sphere-uv this outward-normal (:u rec) (:v rec))
+                  {:keys [front-face normal]} (set-face-normal r outward-normal)]
+              (->HitRecord (ray-at r root) normal mat-ptr root u v front-face))
+            (let [root (/ ^double (+ ^double (- ^double half-b) root) ^double a)]
+              (when (> t-max root t-min)
+                (let [outward-normal (vd (v- (ray-at r root) (center this time_)) radius)
+                      {:keys [u v]} (get-sphere-uv this outward-normal (:u rec) (:v rec))
+                      {:keys [front-face normal]} (set-face-normal r outward-normal)]
+                  (->HitRecord (ray-at r root) normal mat-ptr root u v front-face)))))))))
+  (bounding-box [this time0_ time1_ output-box]
+    (surrounding-box (aabb (v- (center this time0_) [radius radius radius])
+                           (v+ (center this time0_) [radius radius radius]))
+                     (aabb (v- (center this time1_) [radius radius radius])
+                           (v+ (center this time1_) [radius radius radius]))))
+  (center [this time_]
+    (v+ center0
+        (v* (v- center1 center0)
+            (/ (- ^double time_ ^double time0)
+               (- ^double time1 ^double time0))))))
+
+(defn moving-sphere [center0 center1 time0 time1 radius mat_ptr]
+  (->MovingSphere center0 center1 time0 time1 radius mat_ptr))
 
 (defn camera [lookfrom lookat vup vfov aspect-ratio
               aperture focus-dist time0 time1]
@@ -347,29 +341,3 @@
   (cond (> mn x) mn
         (> x mx) mx
         :else x))
-
-(defrecord Sphere [center radius mat-ptr]
-  Hittable
-  (hit [{:keys [center radius mat-ptr] :as sphere}
-        {:keys [orig dir] :as r}
-        t-min t-max rec]
-    (let [oc (v- orig center)
-          a (length-squared dir)
-          half-b ^double (dot oc dir)
-          c (- ^double (length-squared oc) ^double (m/pow radius 2))
-          discriminant (- ^double (m/pow half-b 2) ^double (* ^double a ^double c))]
-      (when (pos? ^double discriminant)
-        (let [sqrtd (m/sqrt discriminant)
-              root (/ ^double (- (- ^double half-b) ^double sqrtd) ^double a)]
-          (if (> t-max root t-min)
-            (let [outward-normal (vd (v- (ray-at r root) center) radius)
-                  {:keys [u v]} (get-sphere-uv sphere outward-normal (:u rec) (:v rec))
-                  {:keys [front-face normal]} (set-face-normal r outward-normal)]
-              (->HitRecord (ray-at r root) normal mat-ptr root u v front-face))
-            (let [root (/ ^double (+ ^double (- ^double half-b) root) ^double a)]
-              (when (> t-max root t-min)
-                (let [outward-normal (vd (v- (ray-at r root) center) radius)
-                      {:keys [u v]} (get-sphere-uv sphere outward-normal (:u rec) (:v rec))
-                      {:keys [front-face normal]} (set-face-normal r outward-normal)]
-                  (->HitRecord (ray-at r root) normal mat-ptr root u v front-face)))))))))
-  (center [this time_] center))

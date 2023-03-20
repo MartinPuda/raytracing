@@ -11,7 +11,6 @@
   (hit [this {:keys [orig dir] :as r} t-min t-max rec]
     (when-let [rec1 (hit boundary r ##-Inf ##Inf nil)]
       (when-let [rec2 (hit boundary r (+ ^double (:t rec1) 0.0001) ##Inf nil)]
-        ;(prn "hit skip")
         (let [new-rec1 (cond-> rec1
                                (< ^double (:t rec1)
                                   ^double t-min)
