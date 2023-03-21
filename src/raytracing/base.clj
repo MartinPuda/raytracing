@@ -61,17 +61,8 @@
   (hit [this {:keys [orig dir]} t-min t-max rec]
     (reduce (fn [{:keys [t-min t-max]} a]
               (let [invD ^double (/ 1.0 ^double (dir a))
-                    t0 ^double
-                       ;(if (neg? invD)
-                       ;          (- ^double (maximum a) (* ^double (orig a) invD))
-                       ;          (- ^double (minimum a) (* ^double (orig a) invD)))
-                       (* invD (- (minimum a) (orig a)))
-
-                    t1 ^double
-                       ;(if (neg? invD)
-                       ;          (- ^double (minimum a) (* ^double (orig a) invD))
-                       ;          (- ^double (maximum a) (* ^double (orig a) invD)))
-                       (* invD (- (maximum a) (orig a)))
+                    t0 ^double (* invD (- ^double (minimum a) ^double (orig a)))
+                    t1 ^double (* invD (- ^double (maximum a) ^double (orig a)))
                     temp t1
                     t1 (if (< invD 0.00) t0 t1)
                     t0 (if (< invD 0.00) temp t0)
@@ -119,11 +110,13 @@
               {:temp-box nil :first-box true :output-box output-box}
               objects))))
 
+(defn hittable-list [objects]
+  (->HittableList objects))
+
 (defrecord BvhNode [left right box]
   Hittable
   (hit [this r t-min t-max rec]
     (when (hit box r t-min t-max rec)
-      ;(prn "box-hit")
       (let [{:keys [t] :as hit-left} (hit left r t-min t-max rec)
             hit-right (hit right r t-min (if hit-left t t-max) rec)]
         (or hit-right hit-left))))
@@ -138,8 +131,8 @@
   (int (random-double min_ (inc ^double max_))))
 
 (defn box-compare [axis]
-  (fn [a b] (< ((:minimum (bounding-box a 0 0 nil)) axis)
-               ((:minimum (bounding-box b 0 0 nil)) axis))))
+  (fn [a b] (< ^double ((:minimum (bounding-box a 0 0 nil)) axis)
+               ^double ((:minimum (bounding-box b 0 0 nil)) axis))))
 
 (defn bvhnode
   ([list_ time0 time1] (bvhnode (:objects list_)
@@ -155,15 +148,14 @@
                             [(objects start) (objects start)]
                             (= object-span 2)
                             (if (comparator_ (objects start)
-                                             (objects (inc start)))
+                                             (objects (inc ^long start)))
                               [(objects start)
-                               (objects (inc start))]
-                              [(objects (inc start))
+                               (objects (inc ^long start))]
+                              [(objects (inc ^long start))
                                (objects start)])
                             :else (let [sorted-obj (sort-by #((:minimum (bounding-box % 0 0 nil)) axis)
                                                             < objects)
-
-                                        mid (int (Math/ceil (+ start
+                                        mid (int (Math/ceil (+ ^long start
                                                                ^double (/ object-span 2))))]
                                     [(bvhnode sorted-obj start mid time0 time1)
                                      (bvhnode sorted-obj mid end time0 time1)]))
@@ -216,9 +208,9 @@
             (- (m/sqrt (abs (- 1.0 ^double (length-squared r-out-perp))))))]
     (v+ r-out-perp r-out-parallel)))
 
-(defn near-zero [v3]
-  (let [s 1e-8]
-    (every? #(> s ^double (abs ^double %)) v3)))
+;(defn near-zero [v3]
+;  (let [s 1e-8]
+;    (every? #(> s ^double (abs ^double %)) v3)))
 
 (defn reflectance [^double cosine ^double ref-idx]
   (let [r0 (m/pow
@@ -265,6 +257,9 @@
               [radius radius radius])))
   (center [this time_] center))
 
+(defn sphere [center radius mat-ptr]
+  (->Sphere center radius mat-ptr))
+
 (defrecord MovingSphere [center0 center1
                          ^double time0
                          ^double time1
@@ -309,33 +304,7 @@
 (defn moving-sphere [center0 center1 time0 time1 radius mat_ptr]
   (->MovingSphere center0 center1 time0 time1 radius mat_ptr))
 
-(defn camera [lookfrom lookat vup vfov aspect-ratio
-              aperture focus-dist time0 time1]
-  (let [theta (m/to-radians vfov)
-        h (m/tan (* theta 0.5))
-        viewport-height (* h 2.0)
-        viewport-width (* ^double aspect-ratio viewport-height)
-        w (unit-vector (v- lookfrom lookat))
-        u (unit-vector (cross vup w))
-        v (cross w u)
-        origin lookfrom
-        horizontal (v* u (* ^double focus-dist viewport-width))
-        vertical (v* v (* ^double focus-dist viewport-height))
-        lower-left-corner (v- origin
-                              (vd horizontal 2)
-                              (vd vertical 2)
-                              (v* w focus-dist))
-        lens-radius (/ ^double aperture 2)]
-    {:origin            origin
-     :lower-left-corner lower-left-corner
-     :horizontal        horizontal
-     :vertical          vertical
-     :u                 u
-     :v                 v
-     :w                 w
-     :lens-radius       lens-radius
-     :time0             time0
-     :time1             time1}))
+
 
 (defn clamp [^double x ^double mn ^double mx]
   (cond (> mn x) mn

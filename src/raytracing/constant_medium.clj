@@ -4,8 +4,6 @@
             [clojure.math :as m])
   (:gen-class))
 
-(set! *unchecked-math* :warn-on-boxed)
-
 (defrecord ConstantMedium [boundary phase-function neg-inv-density]
   Hittable
   (hit [this {:keys [orig dir] :as r} t-min t-max rec]

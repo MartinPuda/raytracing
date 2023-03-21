@@ -16,7 +16,7 @@
 
 (defn solid-color
   ([c] (->SolidColor c))
-  ([red green blue] (solid-color [red green blue])))
+  ([red green blue] (->SolidColor [red green blue])))
 
 (defrecord CheckerTexture [odd even]
   Texture
@@ -27,11 +27,11 @@
         (value odd u v p)
         (value even u v p)))))
 
-(defn checker-texture
-  ([c1 c2] (if (satisfies? Texture c1)
-             (->CheckerTexture c1 c2)
-             (->CheckerTexture (solid-color c1)
-                               (solid-color c2)))))
+(defn checker-texture [c1 c2]
+  (if (satisfies? Texture c1)
+    (->CheckerTexture c1 c2)
+    (->CheckerTexture (solid-color c1)
+                      (solid-color c2))))
 
 (defrecord NoiseTexture [perlin-noise
                          ^long scale]
@@ -53,10 +53,8 @@
   (value [this u v p]
     (if-not data
       [0 1 1]
-      (let [;v (/ v 10.0) ;bytes-per-pixel 3
-            uu ^double (clamp u 0.0 1.0)
+      (let [uu ^double (clamp u 0.0 1.0)
             vv (- 1.0 ^double (clamp v 0.0 1.0))
-            ; (clamp v 0.0 1.0)
             i (int (* uu width))
             j (int (* vv height))
             i (if (>= i width) (dec width) i)
@@ -73,8 +71,8 @@
          buffer (.getDataBuffer (.getRaster image))
          data (->> (.getData ^DataBufferByte buffer)
                    (map (fn [^long n] (if (neg? n) (+ 256 n) n)))
-                   (partition 3)
-                   (mapv (comp vec reverse)))
+                   (partitionv 3)
+                   (mapv rseq))
          w (.getWidth image)
          h (.getHeight image)]
      (->ImageTexture (vec (partitionv w data))

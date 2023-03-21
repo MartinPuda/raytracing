@@ -59,6 +59,9 @@
        :scattered   (ray p direction time_)}))
   (emitted [this u v p] [0.0 0.0 0.0]))
 
+(defn dielectric [ir]
+  (->Dielectric ir))
+
 (defrecord DiffuseLight [emit]
   Material
   (scatter [{:keys [albedo_ fuzz] :as mat}

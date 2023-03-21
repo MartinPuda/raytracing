@@ -7,15 +7,15 @@
   (noise [this point])
   (turb [this p depth]))
 
-(defn trilinear-interp [c ^double u ^double v ^double w]
-  (->> (for [^double i [0 1]
-             ^double j [0 1]
-             ^double k [0 1]]
-         (* ^double (+ (* i u) (* (- 1 i) (- 1 u)))
-            ^double (+ (* j v) (* (- 1 j) (- 1 v)))
-            ^double (+ (* k w) (* (- 1 k) (- 1 w)))
-            ^double (get-in c [i j k])))
-       (reduce +)))
+;(defn trilinear-interp [c ^double u ^double v ^double w]
+;  (->> (for [^double i [0 1]
+;             ^double j [0 1]
+;             ^double k [0 1]]
+;         (* ^double (+ (* i u) (* (- 1 i) (- 1 u)))
+;            ^double (+ (* j v) (* (- 1 j) (- 1 v)))
+;            ^double (+ (* k w) (* (- 1 k) (- 1 w)))
+;            ^double (get-in c [i j k])))
+;       (reduce +)))
 
 (defn perlin-interp [c ^double u ^double v ^double w]
   (let [[uu vv ww] (mapv #(* ^double %
