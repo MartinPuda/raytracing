@@ -304,8 +304,6 @@
 (defn moving-sphere [center0 center1 time0 time1 radius mat_ptr]
   (->MovingSphere center0 center1 time0 time1 radius mat_ptr))
 
-
-
 (defn clamp [^double x ^double mn ^double mx]
   (cond (> mn x) mn
         (> x mx) mx

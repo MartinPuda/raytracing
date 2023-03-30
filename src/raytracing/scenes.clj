@@ -58,7 +58,6 @@
                                    (sphere center 0.2 (->Metal (random-vec3 0.5 1) (random-double 0 0.5)))
                                    :else (sphere center 0.2 (dielectric 1.5)))))))))
 
-
 (defn random-scene []
   (z-fix (into (random-balls)
            [(sphere [4 1 0] 1.0 (->Metal [0.7 0.6 0.5] 0.0))
@@ -66,25 +65,6 @@
             (sphere [-4 1 0] 1.0 (->Metal [0.7 0.6 0.5] 0.0))
             (sphere [0 -1000 0] 1000 (lambertian (checker-texture [0.2 0.3 0.1] [0.9 0.9 0.9])))
             (sphere [0 -1000 0] 1000 (lambertian [0.5 0.5 0.5]))])))
-
-;(into
-;  (->> (c/cartesian-product (range -2 2) (range -2 2)) ;(range -11 11) (range -11 11))
-;
-;       (mapv (fn [[a b]] (let [center [(+ (* 5 ^double (rand)) ^long a) ;(+ ^long a (* 0.9 ^double (rand)))
-;                                       0.5
-;                                       (+ (* 5 ^double (rand)) ^long b)]]
-;                           (sphere center 0.5 (->Metal (random-vec3 0.5 1) (random-double 0 0.0)))))))))
-;(+ ^long b (* 0.9 ^double (rand)))]]
-; (sphere center 0.2 (lambertian (mapv * (random-vec3) (random-vec3))))
-;   ))))
-;  ; (sphere center 0.5 (->Metal (random-vec3 0.5 1) (random-double 0 0.5)))))))
-
-;(z-fix [
-;        (sphere [4 1 0] 1.0 (->Metal [0.7 0.6 0.5] 0.0))
-;        (sphere [0 1 0] 1.0 (->Metal [0.7 0.6 0.5] 0.0))
-;        (sphere [-4 1 0] 1.0 (->Metal [0.7 0.6 0.5] 0.0))
-;        (sphere [0 -1000 0] 1000 (lambertian (checker-texture [0.2 0.3 0.1] [0.9 0.9 0.9])))
-;        (sphere [0 -1000 0] 1000 (lambertian [0.5 0.5 0.5]))]))
 
 (defn cornell-box []
   (let [red (lambertian [0.65 0.05 0.05])

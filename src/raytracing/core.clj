@@ -48,7 +48,7 @@
     (.countDown latch)))
 
 (defn -main [& {:keys [samples]
-                :or   {samples 5}}]
+                :or   {samples 30}}]
   (let [aspect-ratio 1.0                                    ;(/ 16.0 9.0) ;1.0
         image-width 200                                     ;400, 600
         image-height (long (/ image-width aspect-ratio))
@@ -56,14 +56,14 @@
         image-height-dec (dec ^long image-height)
         samples-per-pixel samples
         max-depth 50
-        im  :final-scene
+        im :final-scene
         {:keys [world lookfrom lookat vfov aperture background]
          :or   {lookfrom   [13 2 3]
                 lookat     [0 0 0]
                 aperture   0.0
                 vfov       20.0
                 background [0.70 0.80 1.0]}}
-        (im {:world              {:world    (random-scene)
+        (im {:random-scene       {:world    (random-scene)
                                   :aperture 0.1}
              :two-spheres        {:world (two-spheres)}
              :two-perlin-spheres {:world (two-perlin-spheres)}
