@@ -10,7 +10,7 @@ https://raytracing.github.io/books/RayTracingTheNextWeek.html
 
 ## Usage
 
-Run `(-main)` (5 samples per pixel) or `(-main :samples 10)` for different number of samples.
+Run `(-main)` (30 samples per pixel) or `(-main :samples 10)` for different number of samples.
 
 Rendering can take some time.
 
@@ -20,12 +20,11 @@ base < noise < texture < ray < materials < rotate, translate < scenes < core
 base < rectangles < box
 
 ### In progress:
-* buffimage has fixed size
 * performance
 
 ## License
 
-Copyright © 2023
+Copyright © 2023 Martin Půda
 
 This program and the accompanying materials are made available under the
 terms of the Eclipse Public License 2.0 which is available at

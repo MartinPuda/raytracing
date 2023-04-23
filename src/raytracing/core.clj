@@ -85,12 +85,12 @@
                                   :background [0.0 0.0 0.0]
                                   :lookfrom   [478 278 -600]
                                   :lookat     [278 278 0]
-                                  :vfov       40}})
+                                  :vfov       40.0}})
         vup [0 1 0]
         dist-to-focus 10.0
         cam (camera lookfrom lookat vup vfov aspect-ratio aperture dist-to-focus 0.0 1.0) ;500 500
-        buffered-image (BufferedImage. 1000
-                                       1000
+        buffered-image (BufferedImage. (+ ^long image-width 20)
+                                       (+ ^long image-height 75)
                                        BufferedImage/TYPE_INT_RGB)
         latch (CountDownLatch. image-height)
         rc (fn [^long x ^long y]
