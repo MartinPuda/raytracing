@@ -1,8 +1,10 @@
 (ns raytracing.materials
-  (:require [raytracing.base :refer :all]
-            [raytracing.texture :refer :all]
-            [raytracing.ray :refer :all]
-            [clojure.math :as m])
+  (:require
+    [raytracing
+     [base :refer :all]
+     [texture :refer :all]
+     [ray :refer :all]]
+    [clojure.math :as m])
   (:gen-class))
 
 (defprotocol Material

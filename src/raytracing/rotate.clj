@@ -1,7 +1,9 @@
 (ns raytracing.rotate
-  (:require [raytracing.base :refer :all]
-            [raytracing.ray :refer :all]
-            [clojure.math :as m])
+  (:require
+    [raytracing
+     [base :refer :all]
+     [ray :refer :all]]
+    [clojure.math :as m])
   (:gen-class))
 
 (defrecord RotateY [ptr sin-theta cos-theta hasbox bbox]

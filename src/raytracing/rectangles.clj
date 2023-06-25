@@ -1,5 +1,6 @@
 (ns raytracing.rectangles
-  (:require [raytracing.base :refer :all])
+  (:require
+    [raytracing.base :refer :all])
   (:gen-class))
 
 (set! *unchecked-math* :warn-on-boxed)

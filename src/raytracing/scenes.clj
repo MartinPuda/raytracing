@@ -1,16 +1,18 @@
 (ns raytracing.scenes
-  (:require [raytracing.base :refer :all]
-            [raytracing.texture :refer :all]
-            [raytracing.rectangles :refer :all]
-            [raytracing.box :refer :all]
-            [raytracing.translate :refer :all]
-            [raytracing.rotate :refer :all]
-            [raytracing.materials :refer :all]
-            [raytracing.constant-medium :refer :all]
-            [raytracing.noise :refer :all]
-            [clojure.java.io :as io]
-            [clojure.math :as m]
-            [clojure.math.combinatorics :as c])
+  (:require
+    [raytracing
+     [base :refer :all]
+     [texture :refer :all]
+     [rectangles :refer :all]
+     [box :refer :all]
+     [translate :refer :all]
+     [rotate :refer :all]
+     [materials :refer :all]
+     [constant-medium :refer :all]
+     [noise :refer :all]]
+    [clojure.math :as m]
+    [clojure.math.combinatorics :as c]
+    [clojure.java.io :as io])
   (:gen-class))
 
 (set! *unchecked-math* :warn-on-boxed)
@@ -60,11 +62,11 @@
 
 (defn random-scene []
   (z-fix (into (random-balls)
-           [(sphere [4 1 0] 1.0 (->Metal [0.7 0.6 0.5] 0.0))
-            (sphere [0 1 0] 1.0 (->Metal [0.7 0.6 0.5] 0.0))
-            (sphere [-4 1 0] 1.0 (->Metal [0.7 0.6 0.5] 0.0))
-            (sphere [0 -1000 0] 1000 (lambertian (checker-texture [0.2 0.3 0.1] [0.9 0.9 0.9])))
-            (sphere [0 -1000 0] 1000 (lambertian [0.5 0.5 0.5]))])))
+               [(sphere [4 1 0] 1.0 (->Metal [0.7 0.6 0.5] 0.0))
+                (sphere [0 1 0] 1.0 (->Metal [0.7 0.6 0.5] 0.0))
+                (sphere [-4 1 0] 1.0 (->Metal [0.7 0.6 0.5] 0.0))
+                (sphere [0 -1000 0] 1000 (lambertian (checker-texture [0.2 0.3 0.1] [0.9 0.9 0.9])))
+                (sphere [0 -1000 0] 1000 (lambertian [0.5 0.5 0.5]))])))
 
 (defn cornell-box []
   (let [red (lambertian [0.65 0.05 0.05])

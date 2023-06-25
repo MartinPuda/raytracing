@@ -1,7 +1,9 @@
 (ns raytracing.constant-medium
-  (:require [raytracing.base :refer :all]
-            [raytracing.materials :refer :all]
-            [clojure.math :as m])
+  (:require
+    [raytracing
+     [base :refer :all]
+     [materials :refer :all]]
+    [clojure.math :as m])
   (:gen-class))
 
 (defrecord ConstantMedium [boundary phase-function neg-inv-density]

@@ -1,6 +1,6 @@
 (ns raytracing.base
-  (:require [clojure.java.io :as io]
-            [clojure.math :as m])
+  (:require
+    [clojure.math :as m])
   (:gen-class))
 
 (set! *unchecked-math* :warn-on-boxed)

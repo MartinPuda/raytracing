@@ -1,6 +1,7 @@
 (ns raytracing.noise
-  (:require [raytracing.base :refer :all]
-            [clojure.math :as m])
+  (:require
+    [raytracing.base :refer :all]
+    [clojure.math :as m])
   (:gen-class))
 
 (defprotocol Noise

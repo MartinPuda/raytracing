@@ -1,6 +1,8 @@
 (ns raytracing.ray
-  (:require [raytracing.base :refer :all]
-            [raytracing.texture :refer :all])
+  (:require
+    [raytracing
+     [base :refer :all]
+     [texture :refer :all]])
   (:gen-class))
 
 (defrecord Ray [orig dir time_])

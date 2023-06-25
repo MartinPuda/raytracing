@@ -1,6 +1,8 @@
 (ns raytracing.box
-  (:require [raytracing.base :refer :all]
-            [raytracing.rectangles :refer :all])
+  (:require
+    [raytracing
+     [base :refer :all]
+     [rectangles :refer :all]])
   (:gen-class))
 
 (defrecord Box [box-min box-max sides]

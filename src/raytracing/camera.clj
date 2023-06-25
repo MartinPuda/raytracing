@@ -1,6 +1,7 @@
 (ns raytracing.camera
-  (:require [raytracing.base :refer :all]
-            [clojure.math :as m])
+  (:require
+    [raytracing.base :refer :all]
+    [clojure.math :as m])
   (:gen-class))
 
 (defn camera [lookfrom lookat vup vfov aspect-ratio

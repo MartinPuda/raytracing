@@ -1,15 +1,15 @@
 (ns raytracing.core
   (:require
     [clojure.math :as m]
-    [clojure.math.combinatorics :as c]
-    [raytracing.base :refer :all]
-    [raytracing.camera :refer :all]
-    [raytracing.rectangles :refer :all]
-    [raytracing.scenes :refer :all]
-    [raytracing.box :refer :all]
-    [raytracing.ray :refer :all]
-    [raytracing.materials :refer :all]
-    [raytracing.translate :refer :all])
+    [raytracing
+     [base :refer :all]
+     [camera :refer :all]
+     [rectangles :refer :all]
+     [scenes :refer :all]
+     [box :refer :all]
+     [ray :refer :all]
+     [materials :refer :all]
+     [translate :refer :all]])
   (:import (javax.swing JFrame JPanel)
            (java.awt Dimension BorderLayout Color)
            (java.awt.image BufferedImage)

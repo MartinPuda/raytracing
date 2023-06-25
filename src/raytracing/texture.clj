@@ -1,7 +1,9 @@
 (ns raytracing.texture
-  (:require [raytracing.base :refer :all]
-            [raytracing.noise :refer :all]
-            [clojure.math :as m])
+  (:require
+    [raytracing
+     [base :refer :all]
+     [noise :refer :all]]
+    [clojure.math :as m])
   (:import (java.awt.image DataBufferByte)
            (java.net URL)
            (javax.imageio ImageIO))
